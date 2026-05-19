@@ -1,0 +1,56 @@
+x-app-base: &app-base
+  image: fm-analytics:latest
+  volumes:
+    - .:/app
+    - /app/.venv
+  env_file:
+    - .env
+  depends_on:
+    - fm-redis
+    - fm-warehouse
+  restart: unless-stopped
+
+services:
+  fm-warehouse:
+    image: postgres:18-alpine
+    container_name: fm-warehouse
+    environment:
+      POSTGRES_USER: cruyf
+      POSTGRES_PASSWORD: fm_moneyball
+      POSTGRES_DB: fm_analytica
+    ports:
+      - "5432:5432"
+    volumes:
+      - fm_warehouse_data:/var/lib/postgresql
+    restart: unless-stopped
+
+  fm-redis:
+    image: redis:8-alpine
+    container_name: fm-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  fm-build:
+    build: .
+    image: fm-analytics:latest
+
+  fm-celery-scheduler:
+    <<: *app-base
+    container_name: fm-celery-worker
+    command: celery -A config worker -l info
+
+  fm-celery-beat:
+    <<: *app-base
+    container_name: fm-celery-beat
+    command: celery -A config beat -l info
+
+  fm-flower:
+    <<: *app-base
+    container_name: fm-flower
+    command: celery -A config flower --port=5555
+    ports:
+      - "5555:5555"
+
+volumes:
+  fm_warehouse_data:

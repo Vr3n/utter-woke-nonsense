@@ -1,0 +1,7 @@
+.venv/
+.git/
+
+prompts/
+docs/
+
+.env.example
