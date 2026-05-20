@@ -1,0 +1,43 @@
+<c-vars active_save saves />
+<header class="mb-8 flex items-center justify-between">
+  <div class="flex items-center gap-10">
+    <a href="{% url 'home' %}"
+       class="text-5xl font-black tracking-widest text-violet-400 transition-colors hover:text-violet-300">
+      [VR3N]
+    </a>
+  </div>
+  <div class="flex items-center gap-6">
+    <div class="relative" id="active-save-dropdown">
+      <button onclick="toggleActiveSaveDropdown()"
+              class="flex items-center gap-2 border border-zinc-800 bg-zinc-950 px-4 py-2 text-sm uppercase tracking-widest transition-all hover:border-cyan-700 hover:bg-zinc-900">
+        {% if active_save %}
+          <span class="text-cyan-400">{{ active_save.name }}</span>
+        {% else %}
+          <span class="text-zinc-500">No active save</span>
+        {% endif %}
+        <svg class="w-3 h-3 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div id="save-dropdown-menu" class="absolute right-0 top-full mt-1 w-56 border border-zinc-800 bg-zinc-950 shadow-2xl hidden z-50">
+        {% for save in saves %}
+          <a href="{% url 'save_detail' save.slug %}"
+             class="block border-b border-zinc-800/50 px-4 py-3 text-sm uppercase tracking-widest transition-colors last:border-b-0
+                    {% if save == active_save %}text-cyan-400 bg-zinc-900{% else %}text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200{% endif %}">
+            <span>{{ save.name }}</span>
+            {% if save.game_version %}
+              <span class="block text-[10px] tracking-[0.3em] text-zinc-700 mt-0.5">{{ save.game_version.game_version }}</span>
+            {% endif %}
+          </a>
+        {% empty %}
+          <div class="px-4 py-3 text-sm text-zinc-600 uppercase tracking-widest">No saves yet</div>
+        {% endfor %}
+      </div>
+    </div>
+    <button hx-get="/partials/saves/create/"
+            hx-target="#modal-content"
+            class="border border-zinc-800 bg-zinc-950 px-6 py-3 uppercase tracking-widest text-sm transition-all hover:bg-zinc-900 hover:border-violet-700 active:scale-[0.98]">
+      + Create Save
+    </button>
+  </div>
+</header>

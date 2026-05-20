@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     # Third Party Apps
     "django_htmx",
     "django_cotton",
+    "django_filters",
     "tailwind",
     "theme",
     "django_browser_reload",

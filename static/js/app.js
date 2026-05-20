@@ -39,9 +39,18 @@ document.body.addEventListener("htmx:afterSettle", function (e) {
   }
 });
 
+function toggleActiveSaveDropdown() {
+  document.getElementById("save-dropdown-menu").classList.toggle("hidden");
+}
+
 document.addEventListener("click", function (e) {
   if (e.target.id === "modal-overlay") {
     closeModal();
+  }
+  var dropdown = document.getElementById("active-save-dropdown");
+  if (dropdown && !dropdown.contains(e.target)) {
+    var menu = document.getElementById("save-dropdown-menu");
+    if (menu) menu.classList.add("hidden");
   }
 });
 

@@ -3,27 +3,30 @@ from collections import OrderedDict
 from django.shortcuts import get_object_or_404, render
 from django_htmx.http import trigger_client_event
 
+from .filters import SaveFilter
 from .forms import SaveCreateForm
 from .models import SaveMaster
 
 
 def home(request):
-    return render(request, "pages/home.html")
+    saves = SaveMaster.objects.select_related("game_version").order_by("-updated_at")
+    active_save = saves.first()
+    return render(request, "pages/home.html", {"active_save": active_save, "saves": saves})
 
 
 def save_detail(request, save_slug):
     save = get_object_or_404(
         SaveMaster.objects.select_related("game_version"), slug=save_slug
     )
+    saves = SaveMaster.objects.select_related("game_version").order_by("-updated_at")
     active_team = save.managed_teams.filter(is_active=True).select_related("team").first()
-    return render(request, "pages/save_detail.html", {"save": save, "active_team": active_team})
+    return render(request, "pages/save_detail.html", {"save": save, "saves": saves, "active_team": active_team})
 
 
 def save_list_partial(request):
-    q = request.GET.get("q", "")
-    saves = SaveMaster.objects.select_related("game_version").order_by("-updated_at")
-    if q:
-        saves = saves.filter(name__icontains=q)
+    qs = SaveMaster.objects.select_related("game_version").order_by("-updated_at")
+    f = SaveFilter(request.GET, queryset=qs)
+    saves = f.qs
 
     version_groups = OrderedDict()
     for save in saves:

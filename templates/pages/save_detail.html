@@ -2,20 +2,7 @@
 {% block body %}
 
 <c-layout.app_shell>
-  <header class="mb-8 flex items-center justify-between">
-    <div class="flex items-center gap-10">
-      <div class="text-5xl font-black tracking-widest text-violet-400">
-        [VR3N]
-      </div>
-      <div class="uppercase tracking-[0.2em] text-sm">
-        <span class="text-zinc-500">ACTIVE_SAVE:</span>
-        <a href="{% url 'home' %}" class="text-violet-400 hover:text-violet-300 transition-colors"> {{ save.name }} </a>
-      </div>
-    </div>
-    <div class="text-sm uppercase tracking-[0.2em] text-zinc-500">
-      v1.0.0 | TERMINAL MODE
-    </div>
-  </header>
+  <c-navigation.header :active_save="save" :saves="saves" />
 
   {% if active_team %}
     <div class="mb-6 border border-zinc-800 bg-zinc-950 px-6 py-3">
