@@ -1,0 +1,34 @@
+{% load static tailwind_tags django_htmx %}
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{% block title %}VR3N{% endblock %}</title>
+
+    {% tailwind_css %}
+
+    {% htmx_script %}
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}" />
+  </head>
+
+  <body class="min-h-screen bg-[#050505] text-zinc-100 antialiased" hx-headers='{"x-csrftoken": "{{ csrf_token }}"}'>
+    {% block body %}
+    {% endblock body %}
+
+    <div id="modal-overlay" class="fixed inset-0 z-50 hidden">
+      <div class="fixed inset-0 bg-black/70 backdrop-blur-sm"></div>
+      <div class="fixed inset-0 flex items-center justify-center p-4">
+        <div class="relative w-full max-w-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
+          <div class="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
+            <span id="modal-title" class="text-sm uppercase tracking-[0.2em] text-violet-400 font-bold">CREATE SAVE</span>
+            <button onclick="closeModal()" class="text-zinc-600 hover:text-zinc-300 text-xl leading-none">&times;</button>
+          </div>
+          <div id="modal-content" class="p-6" hx-swap="innerHTML" hx-target="this"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="{% static 'js/app.js' %}"></script>
+  </body>
+</html>

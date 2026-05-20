@@ -1,0 +1,8 @@
+<c-vars type="text" errors />
+
+<input type="{{ type }}" {{ attrs }}
+       class="w-full border border-zinc-800 bg-zinc-950 px-4 py-3 text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20{% if errors %} border-red-500{% endif %}" />
+
+{% if errors %}
+  <p class="text-red-400 text-xs mt-1">{{ errors.0 }}</p>
+{% endif %}

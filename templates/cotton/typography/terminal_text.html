@@ -1,0 +1,15 @@
+<span
+  class="
+    font-mono
+    text-cyan-400
+    {% if size == 'lg' %}
+      text-lg
+    {% elif size == 'sm' %}
+      text-sm
+    {% else %}
+      text-base
+    {% endif %}
+  "
+>
+  {{ slot }}
+</span>

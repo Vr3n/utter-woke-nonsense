@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block body %}
+
+<c-layout.app_shell>
+  <header class="mb-8 flex items-center justify-between">
+    <div class="flex items-center gap-10">
+      <div class="text-5xl font-black tracking-widest text-violet-400">
+        [VR3N]
+      </div>
+    </div>
+    <div class="flex items-center gap-6">
+      <span class="text-sm uppercase tracking-[0.2em] text-zinc-500">v1.0.0 | TERMINAL MODE</span>
+      <button hx-get="/partials/saves/create/"
+              hx-target="#modal-content"
+              class="border border-zinc-800 bg-zinc-950 px-6 py-3 uppercase tracking-widest text-sm transition-all hover:bg-zinc-900 hover:border-violet-700 active:scale-[0.98]">
+        + Create Save
+      </button>
+    </div>
+  </header>
+
+  <c-typography.heading text="SAVE STATION" />
+
+  <div class="mb-8">
+    <input type="text"
+           placeholder="filter saves..."
+           hx-get="/partials/saves/"
+           hx-trigger="keyup changed delay:200ms"
+           hx-target="#save-list"
+           hx-swap="innerHTML"
+           class="w-full border border-zinc-800 bg-zinc-950 px-4 py-3 text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20" />
+  </div>
+
+  <div id="save-list"
+       hx-get="/partials/saves/"
+       hx-trigger="load, save-created from:body"
+       hx-swap="innerHTML"
+       hx-target="#save-list">
+    <div class="text-center py-12 text-zinc-600 uppercase tracking-[0.2em] text-sm">Loading saves...</div>
+  </div>
+</c-layout.app_shell>
+
+{% endblock %}

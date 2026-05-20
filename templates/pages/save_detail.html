@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block body %}
+
+<c-layout.app_shell>
+  <header class="mb-8 flex items-center justify-between">
+    <div class="flex items-center gap-10">
+      <div class="text-5xl font-black tracking-widest text-violet-400">
+        [VR3N]
+      </div>
+      <div class="uppercase tracking-[0.2em] text-sm">
+        <span class="text-zinc-500">ACTIVE_SAVE:</span>
+        <a href="{% url 'home' %}" class="text-violet-400 hover:text-violet-300 transition-colors"> {{ save.name }} </a>
+      </div>
+    </div>
+    <div class="text-sm uppercase tracking-[0.2em] text-zinc-500">
+      v1.0.0 | TERMINAL MODE
+    </div>
+  </header>
+
+  {% if active_team %}
+    <div class="mb-6 border border-zinc-800 bg-zinc-950 px-6 py-3">
+      <div class="flex items-center justify-between text-sm">
+        <div class="uppercase tracking-[0.2em]">
+          <span class="text-zinc-500">MANAGING:</span>
+          <span class="text-cyan-400 font-bold ml-2">{{ active_team.team.name }}</span>
+        </div>
+        <div class="text-zinc-600 text-xs">
+          Since {{ active_team.start_date }}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <nav class="mb-8 flex gap-4">
+    <c-navigation.nav_tab text="Squad" active="true" />
+    <c-navigation.nav_tab text="Scouting" />
+    <c-navigation.nav_tab text="Matchdays" />
+    <c-navigation.nav_tab text="Saves" />
+  </nav>
+
+  <section class="grid grid-cols-4 gap-6 mb-8">
+    <c-metrics.metric_card label="Total Players" value="23" color="cyan" />
+    <c-metrics.metric_card label="Avg Rating" value="7.8" color="pink" />
+    <c-metrics.metric_card label="Formation" value="4-3-3" color="purple" />
+    <c-metrics.metric_card label="Pipeline Health" value="98.7%" color="cyan" />
+  </section>
+</c-layout.app_shell>
+
+{% endblock %}

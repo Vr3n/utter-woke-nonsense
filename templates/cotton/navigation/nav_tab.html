@@ -1,0 +1,16 @@
+<button
+  class="
+    border border-zinc-800
+    px-8 py-4
+    text-sm uppercase
+    tracking-[0.2em]
+    transition-all
+    {% if active %}
+      bg-violet-400 text-black font-bold
+    {% else %}
+      bg-zinc-900 text-zinc-300 hover:bg-zinc-800
+    {% endif %}
+  "
+>
+  {{ text }}
+</button>

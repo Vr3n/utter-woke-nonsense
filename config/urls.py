@@ -15,8 +15,15 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
+
+from apps.core.views import home, save_create_partial, save_detail, save_list_partial
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', home, name='home'),
+    path('partials/saves/', save_list_partial, name='save_list_partial'),
+    path('partials/saves/create/', save_create_partial, name='save_create_partial'),
+    path('<slug:save_slug>/', save_detail, name='save_detail'),
+    path("__reload__/", include("django_browser_reload.urls")),
 ]

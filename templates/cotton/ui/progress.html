@@ -1,0 +1,16 @@
+<div class="h-2 overflow-hidden bg-zinc-900">
+  <div
+    class="
+      h-full
+
+      {% if color == 'pink' %}
+        bg-pink-400
+      {% elif color == 'cyan' %}
+        bg-cyan-400
+      {% elif color == 'purple' %}
+        bg-violet-400
+      {% endif %}
+    "
+    style="width: {{ value }}%"
+  ></div>
+</div>
