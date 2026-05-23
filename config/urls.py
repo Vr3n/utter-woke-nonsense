@@ -24,6 +24,7 @@ urlpatterns = [
     path('', home, name='home'),
     path('partials/saves/', save_list_partial, name='save_list_partial'),
     path('partials/saves/create/', save_create_partial, name='save_create_partial'),
+    path('', include('apps.landing.urls')),
     path('<slug:save_slug>/', save_detail, name='save_detail'),
     path("__reload__/", include("django_browser_reload.urls")),
 ]

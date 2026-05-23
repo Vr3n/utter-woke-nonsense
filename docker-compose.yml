@@ -5,6 +5,10 @@ x-app-base: &app-base
     - /app/.venv
   env_file:
     - .env
+  environment:
+    CELERY_BROKER_URL: redis://fm-redis:6379/0
+    CELERY_RESULT_BACKEND: redis://fm-redis:6379/1
+    POSTGRES_HOST: fm-warehouse
   depends_on:
     - fm-redis
     - fm-warehouse
@@ -38,17 +42,17 @@ services:
   fm-celery-scheduler:
     <<: *app-base
     container_name: fm-celery-worker
-    command: celery -A config worker -l info
+    command: celery -A config worker -l info -E
 
   fm-celery-beat:
     <<: *app-base
     container_name: fm-celery-beat
-    command: celery -A config beat -l info
+    command: celery -A config beat -l info -s /tmp/celerybeat-schedule
 
   fm-flower:
     <<: *app-base
     container_name: fm-flower
-    command: celery -A config flower --port=5555
+    command: celery -A config flower --port=5555 --enable_events
     ports:
       - "5555:5555"
 

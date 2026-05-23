@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block body %}
+
+<c-layout.app_shell>
+  <c-navigation.header :active_save="save" :saves="saves" />
+
+  {% if active_team %}
+    <div class="mb-6 border border-zinc-800 bg-zinc-950 px-6 py-3">
+      <div class="flex items-center justify-between text-sm">
+        <div class="uppercase tracking-[0.2em]">
+          <span class="text-zinc-500">MANAGING:</span>
+          <span class="text-cyan-400 font-bold ml-2">{{ active_team.team.name }}</span>
+        </div>
+        <div class="text-zinc-600 text-xs">
+          Since {{ active_team.start_date }}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <nav class="mb-8 flex gap-4">
+    <c-navigation.nav_tab text="Overview" url="{% url 'save_detail' save_slug=save.slug %}" />
+    <c-navigation.nav_tab text="Squad" url="{% url 'save_squad' save_slug=save.slug %}" active="{% if snapshot_type == 'squad_snapshot' %}true{% endif %}" />
+    <c-navigation.nav_tab text="Scouting" url="{% url 'save_scouting' save_slug=save.slug %}" active="{% if snapshot_type == 'scouting_snapshot' %}true{% endif %}" />
+    <c-navigation.nav_tab text="Matchdays" url="{% url 'save_matchdays' save_slug=save.slug %}" active="{% if snapshot_type == 'squad_matchstats_snapshot' %}true{% endif %}" />
+  </nav>
+
+  <div id="upload-region" class="mb-8">
+    {% include "landing/partials/upload_form.html" %}
+  </div>
+
+  <div hx-trigger="load"
+       hx-get="{% url 'upload_table_partial' save_slug=save.slug snapshot_type=snapshot_type %}"
+       hx-target="#upload-table">
+    {% include "landing/partials/upload_table.html" %}
+  </div>
+</c-layout.app_shell>
+
+{% endblock %}

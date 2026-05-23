@@ -10,11 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import sys
 from pathlib import Path
 
 import environ
-import sys
-from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -49,8 +48,10 @@ INSTALLED_APPS = [
     "tailwind",
     "theme",
     "django_browser_reload",
+    "django_tables2",
     # Django User Apps
     "apps.core",
+    "apps.landing",
 ]
 
 MIDDLEWARE = [
@@ -147,6 +148,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # Celery Configuration
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/1")
+CELERY_TASK_IGNORE_RESULT = True
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 
@@ -162,3 +164,14 @@ TAILWIND_STANDALONE_BUILD_COMMAND_ARGS = (
     "-i static_src/src/styles.css -o ../static/css/dist/styles.css --minify"
 )
 TAILWIND_CSS_PATH = "css/dist/styles.css"
+
+# Landing Zone
+DATASOURCE_ROOT = BASE_DIR / "datasource"
+
+# django-tables2
+DJANGO_TABLES2_TABLE_ATTRS = {
+    "class": "w-full",
+    "thead": {"class": "border-b border-zinc-800"},
+    "th": {"class": "px-6 py-4 text-left text-sm uppercase tracking-widest text-zinc-500"},
+    "td": {"class": "px-6 py-4 text-sm"},
+}
