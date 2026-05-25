@@ -2,4 +2,4 @@ from django.apps import AppConfig
 
 
 class BronzeConfig(AppConfig):
-    name = 'bronze'
+    name = "apps.bronze"

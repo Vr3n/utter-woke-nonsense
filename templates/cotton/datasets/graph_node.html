@@ -1,0 +1,46 @@
+<c-vars step label status duration upload_id />
+
+<div class="flex flex-col items-center w-[140px]" id="node-{{ step }}">
+  <div class="w-full border px-4 py-3 transition-all cursor-pointer group text-center
+    {% if status == 'succeeded' or status == 'completed' %}border-t-2 border-t-emerald-500 border-zinc-800 bg-zinc-950/80
+    {% elif status == 'running' or status == 'processing' or status == 'retrying' %}border-t-2 border-t-amber-500 border-zinc-700 bg-zinc-950
+    {% elif status == 'failed' %}border-t-2 border-t-red-500 border-zinc-800 bg-zinc-950/80
+    {% else %}border-t-2 border-t-zinc-700 border-zinc-800 bg-zinc-950/50{% endif %}
+    hover:border-t-violet-500 hover:bg-zinc-900"
+    hx-get="{% url 'dataset_node_detail' upload_id=upload_id step=step %}"
+    hx-target="#node-detail"
+    hx-swap="innerHTML">
+
+    <div class="flex items-center justify-center gap-2 mb-2">
+      {% if step == "source" %}
+        <svg class="w-4 h-4 {% if status == 'completed' %}text-emerald-400{% elif status == 'failed' %}text-red-400{% else %}text-zinc-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+      {% elif step == "parse" %}
+        <svg class="w-4 h-4 {% if status == 'succeeded' %}text-emerald-400{% elif status == 'failed' %}text-red-400{% else %}text-zinc-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v14a1 1 0 001 1z"/>
+        </svg>
+      {% elif step == "store" %}
+        <svg class="w-4 h-4 {% if status == 'succeeded' %}text-emerald-400{% elif status == 'failed' %}text-red-400{% else %}text-zinc-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+      {% elif step == "bronze" %}
+        <svg class="w-4 h-4 {% if status == 'completed' %}text-emerald-400{% elif status == 'failed' %}text-red-400{% else %}text-zinc-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+      {% endif %}
+    </div>
+
+    <div class="text-xs uppercase tracking-[0.2em] text-zinc-400 font-bold mb-1">{{ label }}</div>
+
+    <div class="flex items-center justify-center gap-1.5">
+      <span class="inline-block w-2 h-2 rounded-full
+        {% if status == 'succeeded' or status == 'completed' %}bg-emerald-400
+        {% elif status == 'running' or status == 'processing' or status == 'retrying' %}bg-amber-400
+        {% elif status == 'failed' %}bg-red-400
+        {% else %}bg-zinc-700{% endif %}">
+      </span>
+      <span class="text-[10px] font-mono text-zinc-600">{{ duration }}</span>
+    </div>
+  </div>
+</div>

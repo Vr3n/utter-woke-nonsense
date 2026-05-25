@@ -1,0 +1,26 @@
+{% for key, group in version_groups.items %}
+  <div class="mb-10">
+    <div class="flex items-center gap-4 mb-6">
+      <span class="text-xs uppercase tracking-[0.3em] text-zinc-600 font-mono">{{ key }}</span>
+      <span class="flex-1 h-px bg-zinc-800"></span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% for save in group.saves %}
+        <a href="{% url 'save_detail' save.slug %}"
+           class="group block border border-zinc-800 bg-zinc-950 p-6 transition-all hover:border-violet-700 hover:bg-zinc-900 animate-fade-slide-up">
+          <div class="text-lg font-bold text-violet-400 group-hover:text-violet-300 transition-colors">
+            {{ save.name }}
+          </div>
+          {% with active=save.managed_teams.filter.is_active.first %}
+            <div class="mt-2 text-sm text-zinc-400">{{ active.team.name|default:"No team set" }}</div>
+          {% endwith %}
+          <div class="mt-1 text-xs text-zinc-600 uppercase tracking-widest">Since {{ save.start_date|date:"M d, Y" }}</div>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+{% empty %}
+  <div class="border border-dashed border-zinc-800 bg-zinc-950/50 p-12 text-center">
+    <p class="text-zinc-600 uppercase tracking-[0.2em] text-sm">No saves found</p>
+  </div>
+{% endfor %}

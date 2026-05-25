@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block body %}
+
+<c-layout.app_shell>
+  <c-navigation.header :active_save="save" :saves="saves" />
+
+  {% if active_team %}
+    <div class="mb-6 border border-zinc-800 bg-zinc-950 px-6 py-3">
+      <div class="flex items-center justify-between text-sm">
+        <div class="uppercase tracking-[0.2em]">
+          <span class="text-zinc-500">MANAGING:</span>
+          <span class="text-cyan-400 font-bold ml-2">{{ active_team.team.name }}</span>
+        </div>
+        <div class="text-zinc-600 text-xs">
+          Since {{ active_team.start_date }}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <nav class="mb-8 flex gap-4">
+    <c-navigation.nav_tab text="Overview" url="{% url 'save_detail' save_slug=save.slug %}" />
+    <c-navigation.nav_tab text="Squad" url="{% url 'save_squad' save_slug=save.slug %}" />
+    <c-navigation.nav_tab text="Scouting" url="{% url 'save_scouting' save_slug=save.slug %}" />
+    <c-navigation.nav_tab text="Matchdays" url="{% url 'save_matchdays' save_slug=save.slug %}" />
+    <c-navigation.nav_tab text="Datasets" url="{% url 'save_datasets' save_slug=save.slug %}" active="true" />
+  </nav>
+
+  {% comment %}Metrics row{% endcomment %}
+  <section class="grid grid-cols-4 gap-6 mb-8">
+    <c-metrics.metric_card label="Pipeline Health" value="{{ health }}%" color="purple" />
+    <c-metrics.metric_card label="Backlog" value="{{ backlog }}" color="pink" />
+    <c-metrics.metric_card label="Data Volume" value="{{ data_volume }}" color="cyan" />
+    <c-metrics.metric_card label="P95 Latency" value="{{ p95_latency }}" color="cyan" />
+  </section>
+
+  {% comment %}SSE container for live updates{% endcomment %}
+  <div id="listing-sse"
+       hx-ext="sse"
+       sse-connect="{% url 'dataset_listing_stream' save_slug=save.slug %}"
+       sse-swap="dataset-event"
+       hx-swap="none">
+
+    {% comment %}Section 1: Active / Failed{% endcomment %}
+    <div class="mb-8">
+      <div class="mb-4 flex items-center gap-3 border-b border-zinc-800 pb-3">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-red-400 font-bold">Active / Failed</h2>
+        <c-ui.badge>{{ active_failed|length }}</c-ui.badge>
+      </div>
+      {% if active_failed %}
+        <div class="border border-zinc-800 divide-y divide-zinc-800/50">
+          {% for upload in active_failed %}
+            {% include "datasets/partials/listing_row.html" %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="border border-zinc-800 bg-zinc-950 px-6 py-8 text-center">
+          <span class="text-sm uppercase tracking-[0.2em] text-zinc-700">No items</span>
+        </div>
+      {% endif %}
+    </div>
+
+    {% comment %}Section 2: Completed Landing Zones{% endcomment %}
+    <div class="mb-8">
+      <div class="mb-4 flex items-center gap-3 border-b border-zinc-800 pb-3">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-zinc-400 font-bold">Completed Landing Zones</h2>
+        <c-ui.badge>{{ completed_landing|length }}</c-ui.badge>
+      </div>
+      {% if completed_landing %}
+        <div class="border border-zinc-800 divide-y divide-zinc-800/50">
+          {% for upload in completed_landing %}
+            {% include "datasets/partials/listing_row.html" %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="border border-zinc-800 bg-zinc-950 px-6 py-8 text-center">
+          <span class="text-sm uppercase tracking-[0.2em] text-zinc-700">No items</span>
+        </div>
+      {% endif %}
+    </div>
+
+    {% comment %}Section 3: Completed Bronze{% endcomment %}
+    <div class="mb-8">
+      <div class="mb-4 flex items-center gap-3 border-b border-zinc-800 pb-3">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-emerald-400 font-bold">Completed Bronze</h2>
+        <c-ui.badge>{{ completed_bronze|length }}</c-ui.badge>
+      </div>
+      {% if completed_bronze %}
+        <div class="border border-zinc-800 divide-y divide-zinc-800/50">
+          {% for upload in completed_bronze %}
+            {% include "datasets/partials/listing_row.html" %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="border border-zinc-800 bg-zinc-950 px-6 py-8 text-center">
+          <span class="text-sm uppercase tracking-[0.2em] text-zinc-700">No items</span>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  {% comment %}Performance badge{% endcomment %}
+  <div class="mt-8 flex justify-end">
+    {% include "datasets/partials/perf_badge.html" %}
+  </div>
+</c-layout.app_shell>
+
+{% endblock %}

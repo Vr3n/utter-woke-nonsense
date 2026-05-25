@@ -1,0 +1,67 @@
+<div id="modal-form-fields">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="border border-red-800 bg-red-950/50 px-4 py-3 text-red-400 text-sm">
+      {{ form.non_field_errors }}
+    </div>
+  {% endif %}
+
+  <div class="space-y-1">
+    <label class="text-sm uppercase tracking-[0.2em] text-zinc-500">Save Name</label>
+    {{ form.name }}
+    {% if form.name.errors %}<p class="text-red-400 text-xs mt-1">{{ form.name.errors.0 }}</p>{% endif %}
+  </div>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div class="space-y-1">
+      <label class="text-sm uppercase tracking-[0.2em] text-zinc-500">Start Date</label>
+      {{ form.start_date }}
+      {% if form.start_date.errors %}<p class="text-red-400 text-xs mt-1">{{ form.start_date.errors.0 }}</p>{% endif %}
+    </div>
+    <div class="space-y-1">
+      <label class="text-sm uppercase tracking-[0.2em] text-zinc-500">Version</label>
+      {{ form.game_version }}
+      {% if form.game_version.errors %}<p class="text-red-400 text-xs mt-1">{{ form.game_version.errors.0 }}</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="space-y-1">
+    <label class="text-sm uppercase tracking-[0.2em] text-zinc-500">Description</label>
+    {{ form.description }}
+  </div>
+
+  <hr class="border-zinc-800" />
+
+  <div class="space-y-3" id="team-selection">
+    <label class="text-sm uppercase tracking-[0.2em] text-zinc-500">Team</label>
+
+    {% if form.team.errors or form.new_team_name.errors %}
+      <div class="border border-red-800 bg-red-950/50 px-4 py-3 text-red-400 text-sm">
+        {{ form.team.errors }}{{ form.new_team_name.errors }}
+      </div>
+    {% endif %}
+
+    <div class="flex gap-4 mb-3">
+      <label class="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
+        <input type="radio" name="team_mode" value="existing" checked
+               onchange="document.getElementById('existing-team-field').classList.remove('hidden');
+                        document.getElementById('new-team-field').classList.add('hidden');" />
+        Select existing
+      </label>
+      <label class="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
+        <input type="radio" name="team_mode" value="new"
+               onchange="document.getElementById('existing-team-field').classList.add('hidden');
+                        document.getElementById('new-team-field').classList.remove('hidden');" />
+        Create new
+      </label>
+    </div>
+    <div id="existing-team-field">{{ form.team }}</div>
+    <div id="new-team-field" class="hidden">{{ form.new_team_name }}</div>
+  </div>
+
+  <button type="submit"
+          class="border border-zinc-800 bg-zinc-950 px-8 py-3 uppercase tracking-widest text-sm transition-all hover:bg-zinc-900 hover:border-violet-700 active:scale-[0.98]">
+    Create Save
+  </button>
+</div>

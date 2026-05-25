@@ -1,0 +1,22 @@
+<c-ui.panel>
+  <div class="mb-4 uppercase text-zinc-500 tracking-widest text-sm">
+    {{ label }}
+  </div>
+
+  <div
+    class="
+    text-5xl
+    font-black
+
+    {% if color == 'cyan' %}
+      text-cyan-400
+    {% elif color == 'pink' %}
+      text-pink-400
+    {% elif color == 'purple' %}
+      text-violet-400
+    {% endif %}
+  "
+  >
+    {{ value }}
+  </div>
+</c-ui.panel>

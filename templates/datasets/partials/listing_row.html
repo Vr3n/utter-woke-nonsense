@@ -1,0 +1,73 @@
+<a href="{% url 'dataset_detail' save_slug=save.slug upload_id=upload.id %}"
+   id="upload-row-{{ upload.id }}"
+   class="flex items-center gap-6 px-6 py-4 transition-colors hover:bg-zinc-900/50 group">
+
+  {% comment %}Status dots{% endcomment %}
+  <div class="flex items-center gap-2 min-w-[100px]">
+    {% comment %}Source dot{% endcomment %}
+    <span class="inline-block w-2.5 h-2.5 rounded-full
+      {% if upload.status == 'completed' %}bg-emerald-400
+      {% elif upload.status == 'failed' %}bg-red-400
+      {% elif upload.status == 'pending' %}bg-zinc-700
+      {% else %}bg-amber-400{% endif %}"
+      title="Source: {{ upload.status }}">
+    </span>
+
+    {% comment %}Parse dot{% endcomment %}
+    <span class="inline-block w-2.5 h-2.5 rounded-full
+      {% if upload.parse_status == 'succeeded' %}bg-emerald-400
+      {% elif upload.parse_status == 'failed' %}bg-red-400
+      {% elif upload.parse_status == 'retrying' %}bg-amber-400
+      {% elif upload.parse_status == 'running' %}bg-amber-400 animate-pulse
+      {% else %}bg-zinc-700{% endif %}"
+      title="Parse: {{ upload.parse_status|default:'pending' }}">
+    </span>
+
+    {% comment %}Store dot{% endcomment %}
+    <span class="inline-block w-2.5 h-2.5 rounded-full
+      {% if upload.store_status == 'succeeded' %}bg-emerald-400
+      {% elif upload.store_status == 'failed' %}bg-red-400
+      {% elif upload.store_status == 'retrying' %}bg-amber-400
+      {% elif upload.store_status == 'running' %}bg-amber-400 animate-pulse
+      {% else %}bg-zinc-700{% endif %}"
+      title="Store: {{ upload.store_status|default:'pending' }}">
+    </span>
+
+    {% comment %}Bronze dot{% endcomment %}
+    <span class="inline-block w-2.5 h-2.5 rounded-full
+      {% if upload.bronze_status == 'completed' %}bg-emerald-400
+      {% elif upload.bronze_status == 'failed' %}bg-red-400
+      {% elif upload.bronze_status == 'processing' or upload.bronze_status == 'retrying' %}bg-amber-400
+      {% elif upload.bronze_status == 'pending' and upload.status == 'completed' %}bg-amber-400
+      {% else %}bg-zinc-700{% endif %}"
+      title="Bronze: {{ upload.bronze_status|default:'pending' }}">
+    </span>
+  </div>
+
+  {% comment %}Data label{% endcomment %}
+  <div class="flex-1 min-w-0">
+    <div class="text-sm text-zinc-200 font-medium truncate group-hover:text-cyan-400 transition-colors">
+      {{ upload.data_label }}
+    </div>
+    <div class="text-[11px] uppercase tracking-[0.2em] text-zinc-600 mt-0.5">
+      {{ upload.source_file_name|truncatechars:30 }}
+    </div>
+  </div>
+
+  {% comment %}Snapshot type badge{% endcomment %}
+  <div class="w-32">
+    <span class="inline-block text-[10px] uppercase tracking-[0.2em] px-3 py-1 border border-zinc-700 text-zinc-400">
+      {{ upload.get_snapshot_type_display|default:upload.snapshot_type }}
+    </span>
+  </div>
+
+  {% comment %}File size{% endcomment %}
+  <div class="w-20 text-right">
+    <span class="text-xs text-zinc-500 font-mono">{{ upload.file_size_bytes|filesizeformat|default:'—' }}</span>
+  </div>
+
+  {% comment %}Timestamp{% endcomment %}
+  <div class="w-32 text-right">
+    <span class="text-xs text-zinc-600 font-mono">{{ upload.upload_timestamp|date:"H:i" }}</span>
+  </div>
+</a>

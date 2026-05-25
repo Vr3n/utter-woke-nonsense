@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block body %}
+
+<c-layout.app_shell>
+  <c-navigation.header :active_save="active_save" :saves="saves" />
+
+  <c-typography.heading text="SAVE STATION" />
+
+  <div class="mb-8">
+    <input type="text"
+           name="q"
+           id="search-input"
+           placeholder="filter saves..."
+           hx-get="/partials/saves/"
+           hx-trigger="keyup changed delay:200ms"
+           hx-target="#save-list"
+           hx-swap="innerHTML"
+           class="w-full border border-zinc-800 bg-zinc-950 px-4 py-3 text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20" />
+  </div>
+
+  <div id="save-list"
+       hx-get="/partials/saves/"
+       hx-trigger="load, save-created from:body"
+       hx-swap="innerHTML"
+       hx-target="#save-list"
+       hx-include="#search-input">
+    <div class="text-center py-12 text-zinc-600 uppercase tracking-[0.2em] text-sm">Loading saves...</div>
+  </div>
+</c-layout.app_shell>
+
+{% endblock %}

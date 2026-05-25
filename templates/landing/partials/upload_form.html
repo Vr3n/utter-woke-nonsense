@@ -1,0 +1,37 @@
+<form hx-post="{% url 'upload_snapshot' save_slug=save.slug %}"
+      hx-target="#upload-region"
+      hx-swap="innerHTML"
+      enctype="multipart/form-data"
+      class="border border-zinc-800 bg-zinc-950/80 p-6">
+  {% csrf_token %}
+  <input type="hidden" name="snapshot_type" value="{{ snapshot_type }}">
+
+  <div class="mb-4">
+    <label class="block text-sm uppercase tracking-widest text-zinc-500 mb-2">Ingame Date</label>
+    {{ form.ingame_date }}
+    {% if form.ingame_date.errors %}
+      <div class="text-red-400 text-xs mt-1">{{ form.ingame_date.errors }}</div>
+    {% endif %}
+  </div>
+
+  <div class="mb-4">
+    <label class="block text-sm uppercase tracking-widest text-zinc-500 mb-2">Data Label</label>
+    {{ form.data_label }}
+    {% if form.data_label.errors %}
+      <div class="text-red-400 text-xs mt-1">{{ form.data_label.errors }}</div>
+    {% endif %}
+  </div>
+
+  <div class="mb-6">
+    <label class="block text-sm uppercase tracking-widest text-zinc-500 mb-2">Source File (CSV / HTML)</label>
+    {{ form.source_file }}
+    {% if form.source_file.errors %}
+      <div class="text-red-400 text-xs mt-1">{{ form.source_file.errors }}</div>
+    {% endif %}
+  </div>
+
+  <button type="submit"
+          class="border border-zinc-800 bg-zinc-950 px-6 py-3 uppercase tracking-widest text-sm transition-all hover:bg-zinc-900 hover:border-violet-700 active:scale-[0.98]">
+    Upload
+  </button>
+</form>

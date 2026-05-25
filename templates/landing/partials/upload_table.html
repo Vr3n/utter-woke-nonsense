@@ -1,0 +1,16 @@
+{% load render_table from django_tables2 %}
+
+<div id="upload-table">
+  {% if table.page.object_list|length > 0 %}
+    {% render_table table %}
+  {% else %}
+    <div class="border border-zinc-800 bg-zinc-950/80 p-8 text-center">
+      <p class="text-zinc-600 uppercase tracking-widest text-sm mb-4">No snapshots uploaded yet</p>
+      <p class="text-zinc-700 text-xs mb-6">Upload a CSV or HTML file to get started.</p>
+      <a href="#upload-form"
+         class="inline-block border border-zinc-800 bg-zinc-950 px-6 py-3 uppercase tracking-widest text-sm transition-all hover:bg-zinc-900 hover:border-violet-700">
+        Upload First Snapshot
+      </a>
+    </div>
+  {% endif %}
+</div>
