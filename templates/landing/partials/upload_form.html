@@ -3,6 +3,7 @@
       hx-swap="innerHTML"
       enctype="multipart/form-data"
       class="border border-zinc-800 bg-zinc-950/80 p-6">
+  {% csrf_token %}
   <input type="hidden" name="snapshot_type" value="{{ snapshot_type }}">
 
   <div class="mb-4">

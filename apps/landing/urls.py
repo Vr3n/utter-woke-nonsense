@@ -17,6 +17,11 @@ urlpatterns = [
     ),
 
     path(
+        "hx/<slug:save_slug>/<int:upload_id>/retry/",
+        views.upload_retry,
+        name="upload_retry",
+    ),
+    path(
         "<slug:save_slug>/squad/",
         views.save_snapshot_page,
         {"snapshot_type": "squad_snapshot"},

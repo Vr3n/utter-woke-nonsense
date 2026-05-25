@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from django.contrib import admin
+from django.utils.html import format_html
+from django.urls import reverse
 
 from .models import LandingUpload, LandingZoneTask
 
@@ -39,9 +41,36 @@ class LandingUploadAdmin(admin.ModelAdmin):
         "data_label",
         "ingame_date",
         "status",
+        "bronze_status_display",
         "upload_timestamp",
         "file_size_bytes",
     )
+
+    @admin.display(description="Bronze")
+    def bronze_status_display(self, obj):
+        ingestion = obj.bronze_ingestions.order_by("-id").first()
+        if ingestion is None:
+            return ""
+        url = reverse(
+            "admin:bronze_bronzeingestion_change",
+            args=[ingestion.id],
+        )
+        return format_html(
+            '<a href="{}" style="color:{}">{}</a>',
+            url,
+            self._status_color(ingestion.status),
+            ingestion.status,
+        )
+
+    def _status_color(self, status):
+        colors = {
+            "completed": "green",
+            "failed": "red",
+            "processing": "orange",
+            "retrying": "orange",
+            "pending": "gray",
+        }
+        return colors.get(status, "gray")
     list_filter = ("snapshot_type", "status", "simulation_source")
     search_fields = ("data_label", "source_file_name", "save_master__slug")
     readonly_fields = (

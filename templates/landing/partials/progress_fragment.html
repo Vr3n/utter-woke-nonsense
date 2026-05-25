@@ -1,9 +1,9 @@
 <div id="upload-progress-{{ upload.id }}"
-     {% if not is_terminal %}
+     {% if not is_terminal and not inline %}
      hx-get="{% url 'upload_progress' upload.id %}"
      hx-trigger="every 600ms"
-     {% endif %}
-     hx-swap="outerHTML">
+     hx-swap="outerHTML"
+     {% endif %}>
   {% if upload.status == "completed" %}
     <div class="mb-2 flex items-center gap-2">
       <div class="h-2 w-2 rounded-full bg-green-400"></div>

@@ -8,7 +8,9 @@
 
     {% tailwind_css %}
 
-    {% htmx_script %}
+    {% load static %}
+    <script src="{% static 'django_htmx/htmx.min.js' %}" defer></script>
+    <script src="{% static 'js/htmx-sse.js' %}" defer></script>
     <link rel="stylesheet" href="{% static 'css/theme.css' %}" />
   </head>
 

@@ -19,10 +19,11 @@
   {% endif %}
 
   <nav class="mb-8 flex gap-4">
-    <c-navigation.nav_tab text="Squad" active="true" />
-    <c-navigation.nav_tab text="Scouting" />
-    <c-navigation.nav_tab text="Matchdays" />
-    <c-navigation.nav_tab text="Saves" />
+    <c-navigation.nav_tab text="Overview" url="{% url 'save_detail' save_slug=save.slug %}" active="true" />
+    <c-navigation.nav_tab text="Squad" url="{% url 'save_squad' save_slug=save.slug %}" />
+    <c-navigation.nav_tab text="Scouting" url="{% url 'save_scouting' save_slug=save.slug %}" />
+    <c-navigation.nav_tab text="Matchdays" url="{% url 'save_matchdays' save_slug=save.slug %}" />
+    <c-navigation.nav_tab text="Datasets" url="{% url 'save_datasets' save_slug=save.slug %}" />
   </nav>
 
   <section class="grid grid-cols-4 gap-6 mb-8">

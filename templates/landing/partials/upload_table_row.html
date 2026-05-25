@@ -1,0 +1,35 @@
+<tr id="row-{{ upload.id }}" class="border-b border-zinc-800/50 hover:bg-white/[0.02]">
+  <td class="px-6 py-5 text-sm text-zinc-100">{{ upload.ingame_date|date:"d/m/y" }}</td>
+  <td class="px-6 py-5 text-sm text-zinc-100">{{ upload.data_label }}</td>
+  <td class="px-6 py-5 text-sm text-zinc-400 font-mono">{{ upload.source_file_name }}</td>
+  <td class="px-6 py-5 text-sm text-zinc-400">{{ upload.simulation_source }}</td>
+  <td class="px-6 py-5 text-sm text-zinc-500">{{ upload.upload_timestamp|date:"d/m/y H:i" }}</td>
+  <td class="px-6 py-5">
+    <div class="flex items-center gap-2">
+      {% if upload.status == "completed" %}
+        <div class="h-2 w-2 rounded-full bg-green-400"></div>
+        <span class="text-xs uppercase tracking-widest text-green-400">Completed</span>
+      {% elif upload.status == "processing" or upload.status == "retrying" %}
+        <div class="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></div>
+        <span class="text-xs uppercase tracking-widest text-amber-400">
+          {{ upload.get_status_display }}
+        </span>
+      {% elif upload.status == "failed" %}
+        <div class="h-2 w-2 rounded-full bg-red-400"></div>
+        <span class="text-xs uppercase tracking-widest text-red-400">Failed</span>
+        <button
+          class="ml-2 border border-zinc-700 bg-zinc-950 px-2 py-1 text-[10px] uppercase tracking-widest text-zinc-400 transition-all hover:border-zinc-500 hover:text-zinc-200 active:scale-[0.98]"
+          hx-post="{% url 'upload_retry' save_slug=save.slug upload_id=upload.id %}"
+          hx-target="#row-{{ upload.id }}"
+          hx-swap="outerHTML"
+          hx-indicator="#row-{{ upload.id }}"
+        >
+          Retry
+        </button>
+      {% else %}
+        <div class="h-2 w-2 rounded-full bg-zinc-600"></div>
+        <span class="text-xs uppercase tracking-widest text-zinc-500">Pending</span>
+      {% endif %}
+    </div>
+  </td>
+</tr>

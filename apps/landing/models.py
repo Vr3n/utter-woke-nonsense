@@ -51,7 +51,12 @@ class LandingUpload(models.Model):
         return int((self.parse_progress_current / self.parse_progress_total) * 100)
 
     def incoming_path(self):
-        return str(Path(settings.DATASOURCE_ROOT) / "incoming" / str(self.id) / self.source_file_name)
+        return str(
+            Path(settings.DATASOURCE_ROOT)
+            / "incoming"
+            / str(self.id)
+            / self.source_file_name
+        )
 
     @property
     def staging_path(self):
@@ -81,9 +86,13 @@ class LandingZoneTask(models.Model):
         on_delete=models.CASCADE,
         related_name="task_rows",
     )
-    celery_task_id = models.CharField(max_length=255, db_index=True, blank=True, default="")
+    celery_task_id = models.CharField(
+        max_length=255, db_index=True, blank=True, default=""
+    )
     step = models.CharField(max_length=20, choices=Step.choices)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
     attempt = models.PositiveIntegerField()
     worker_hostname = models.CharField(max_length=255, blank=True, default="")
     error_type = models.CharField(max_length=255, blank=True, default="")

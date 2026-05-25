@@ -83,7 +83,7 @@ def upload_table_partial(request, save_slug, snapshot_type):
     save = get_object_or_404(SaveMaster, slug=save_slug)
     qs = LandingUpload.objects.filter(
         save_master=save, snapshot_type=snapshot_type
-    )
+    ).select_related("save_master")
     table = LandingUploadTable(qs, request=request)
     RequestConfig(
         request, paginate={"per_page": 10}
@@ -93,6 +93,24 @@ def upload_table_partial(request, save_slug, snapshot_type):
         request,
         "landing/partials/upload_table.html",
         {"table": table, "save": save, "snapshot_type": snapshot_type},
+    )
+
+
+def upload_retry(request, save_slug, upload_id):
+    save = get_object_or_404(SaveMaster, slug=save_slug)
+    upload = get_object_or_404(
+        LandingUpload.objects.select_related("save_master"),
+        id=upload_id,
+        save_master=save,
+        status=LandingUpload.Status.FAILED,
+    )
+    dispatch_pipeline(upload.id)
+    upload.refresh_from_db()
+
+    return render(
+        request,
+        "landing/partials/upload_table_row.html",
+        {"upload": upload, "save": save},
     )
 
 
@@ -131,7 +149,7 @@ def upload_status_poll(request, save_slug, snapshot_type, upload_id):
         .first()
     )
 
-    return render(
+    response = render(
         request,
         "landing/partials/upload_status.html",
         {
@@ -141,3 +159,6 @@ def upload_status_poll(request, save_slug, snapshot_type, upload_id):
             "last_error": last_error,
         },
     )
+    if upload.status == LandingUpload.Status.COMPLETED:
+        response["HX-Trigger"] = "datasource-uploaded"
+    return response

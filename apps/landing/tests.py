@@ -165,6 +165,9 @@ def test_duplicate_file_hash_rejected(client, save, sample_csv):
     assert LandingUpload.objects.count() == 1
 
 
+
+
+
 # === Converter strategy tests ===
 
 
@@ -345,13 +348,16 @@ def test_parse_file_failure_sets_failed_when_retries_exhausted(save, settings):
 
 
 @pytest.mark.django_db
-def test_store_parquet_moves_staging_to_final(save, settings):
+@patch("apps.landing.tasks.dispatch_bronze_ingestion")
+def test_store_parquet_moves_staging_to_final(mock_dispatch, save, settings):
     upload = _create_upload(save)
     _write_incoming(upload)
 
     parse_file(upload_id=upload.id)
 
     store_parquet(upload_id=upload.id)
+
+    mock_dispatch.assert_called_once()
 
     upload.refresh_from_db()
     assert upload.status == LandingUpload.Status.COMPLETED

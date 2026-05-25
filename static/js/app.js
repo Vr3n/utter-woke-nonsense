@@ -39,6 +39,13 @@ document.body.addEventListener("htmx:afterSettle", function (e) {
   }
 });
 
+document.body.addEventListener("htmx:beforeSwap", function (evt) {
+  if (evt.detail.xhr.status === 400 && evt.detail.target.id === "upload-region") {
+    evt.detail.shouldSwap = true;
+    evt.detail.isError = false;
+  }
+});
+
 function toggleActiveSaveDropdown() {
   document.getElementById("save-dropdown-menu").classList.toggle("hidden");
 }

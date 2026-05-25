@@ -23,13 +23,14 @@
     <c-navigation.nav_tab text="Squad" url="{% url 'save_squad' save_slug=save.slug %}" active="{% if snapshot_type == 'squad_snapshot' %}true{% endif %}" />
     <c-navigation.nav_tab text="Scouting" url="{% url 'save_scouting' save_slug=save.slug %}" active="{% if snapshot_type == 'scouting_snapshot' %}true{% endif %}" />
     <c-navigation.nav_tab text="Matchdays" url="{% url 'save_matchdays' save_slug=save.slug %}" active="{% if snapshot_type == 'squad_matchstats_snapshot' %}true{% endif %}" />
+    <c-navigation.nav_tab text="Datasets" url="{% url 'save_datasets' save_slug=save.slug %}" />
   </nav>
 
   <div id="upload-region" class="mb-8">
     {% include "landing/partials/upload_form.html" %}
   </div>
 
-  <div hx-trigger="load"
+  <div hx-trigger="load, datasource-uploaded from:body"
        hx-get="{% url 'upload_table_partial' save_slug=save.slug snapshot_type=snapshot_type %}"
        hx-target="#upload-table">
     {% include "landing/partials/upload_table.html" %}

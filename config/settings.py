@@ -52,6 +52,8 @@ INSTALLED_APPS = [
     # Django User Apps
     "apps.core",
     "apps.landing",
+    "apps.bronze",
+    "apps.datasets",
 ]
 
 MIDDLEWARE = [

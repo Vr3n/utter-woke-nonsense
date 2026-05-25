@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% load static %}
+{% block body %}
+
+<c-layout.app_shell>
+  <c-navigation.header :active_save="save" :saves="saves" />
+
+  {% if active_team %}
+    <div class="mb-6 border border-zinc-800 bg-zinc-950 px-6 py-3">
+      <div class="flex items-center justify-between text-sm">
+        <div class="uppercase tracking-[0.2em]">
+          <span class="text-zinc-500">MANAGING:</span>
+          <span class="text-cyan-400 font-bold ml-2">{{ active_team.team.name }}</span>
+        </div>
+        <div class="text-zinc-600 text-xs">
+          Since {{ active_team.start_date }}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% comment %}Breadcrumb + back arrow{% endcomment %}
+  <div class="mb-6 flex items-center gap-3 text-sm uppercase tracking-[0.2em]">
+    <a href="{% url 'save_datasets' save_slug=save.slug %}"
+       class="flex items-center gap-2 text-zinc-500 transition-colors hover:text-zinc-300">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Datasets
+    </a>
+    <span class="text-zinc-700">/</span>
+    <span class="text-zinc-300 truncate max-w-[400px]">{{ upload.source_file_name }}</span>
+  </div>
+
+  {% comment %}SSE container for live updates{% endcomment %}
+  <div id="detail-sse"
+       hx-ext="sse"
+       sse-connect="{% url 'dataset_event_stream' upload_id=upload.id %}"
+       sse-swap="dataset-event"
+       hx-swap="none">
+
+    {% comment %}Statistics panel{% endcomment %}
+    <div class="mb-8 border border-zinc-800 bg-zinc-950/80">
+      <div class="grid grid-cols-3">
+        <div class="border-b border-r border-zinc-800 px-5 py-4">
+          <div class="text-[10px] uppercase tracking-[0.2em] text-zinc-600 mb-1">Source</div>
+          <div class="text-sm font-mono text-zinc-200 truncate" title="{{ upload.source_file_name }}">{{ upload.source_file_name|truncatechars:25 }}</div>
+        </div>
+        <div class="border-b border-r border-zinc-800 px-5 py-4">
+          <div class="text-[10px] uppercase tracking-[0.2em] text-zinc-600 mb-1">Snapshot</div>
+          <div class="text-sm font-mono text-cyan-400">{{ upload.get_snapshot_type_display|default:upload.snapshot_type }}</div>
+        </div>
+        <div class="border-b border-zinc-800 px-5 py-4">
+          <div class="text-[10px] uppercase tracking-[0.2em] text-zinc-600 mb-1">File Size</div>
+          <div class="text-sm font-mono text-zinc-200">{{ file_size }}</div>
+        </div>
+        <div class="border-r border-zinc-800 px-5 py-4">
+          <div class="text-[10px] uppercase tracking-[0.2em] text-zinc-600 mb-1">Rows</div>
+          <div class="text-sm font-mono text-zinc-200">
+            {% if bronze_ingestion and bronze_ingestion.source_row_count is not None %}
+              <span class="text-emerald-400">{{ bronze_ingestion.source_row_count }}</span>
+              <span class="text-zinc-600 mx-1">→</span>
+              <span class="text-cyan-400">{{ bronze_ingestion.ingested_row_count }}</span>
+            {% else %}
+              <span class="text-zinc-600">—</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="border-r border-zinc-800 px-5 py-4">
+          <div class="text-[10px] uppercase tracking-[0.2em] text-zinc-600 mb-1">Pipeline</div>
+          <div class="text-sm font-mono
+            {% if pipeline_duration %}text-violet-400{% else %}text-zinc-600{% endif %}">
+            {% if pipeline_duration %}{{ pipeline_duration }}s{% else %}—{% endif %}
+          </div>
+        </div>
+        <div class="px-5 py-4">
+          <div class="text-[10px] uppercase tracking-[0.2em] text-zinc-600 mb-1">Hash</div>
+          <div class="text-sm font-mono text-zinc-500 truncate" title="{{ upload.source_file_hash }}">{{ upload.source_file_hash|truncatechars:16 }}</div>
+        </div>
+      </div>
+    </div>
+
+    {% comment %}Pipeline graph{% endcomment %}
+    <div class="mb-8">
+      <div class="mb-6">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-zinc-400 font-bold">Pipeline Graph</h2>
+      </div>
+
+      <div class="flex items-center justify-center py-8" id="pipeline-graph">
+        <c-datasets.graph_node
+          step="source"
+          label="Source"
+          status="{{ upload.status }}"
+          duration="—"
+          upload_id="{{ upload.id }}" />
+
+        <div class="pipeline-connector">
+          <svg width="48" height="2" viewBox="0 0 48 2" class="text-zinc-700">
+            <line x1="0" y1="1" x2="44" y2="1" stroke="currentColor" stroke-width="1.5"/>
+            <polygon points="44,0 48,1 44,2" fill="currentColor"/>
+          </svg>
+        </div>
+
+        {% with latest_parse=parse_attempts|last %}
+        <c-datasets.graph_node
+          step="parse"
+          label="Parse"
+          status="{{ latest_parse.status|default:'pending' }}"
+          duration="{% if latest_parse.duration_seconds %}{{ latest_parse.duration_seconds }}s{% else %}—{% endif %}"
+          upload_id="{{ upload.id }}" />
+        {% endwith %}
+
+        <div class="pipeline-connector">
+          <svg width="48" height="2" viewBox="0 0 48 2" class="text-zinc-700">
+            <line x1="0" y1="1" x2="44" y2="1" stroke="currentColor" stroke-width="1.5"/>
+            <polygon points="44,0 48,1 44,2" fill="currentColor"/>
+          </svg>
+        </div>
+
+        {% with latest_store=store_attempts|last %}
+        <c-datasets.graph_node
+          step="store"
+          label="Store"
+          status="{{ latest_store.status|default:'pending' }}"
+          duration="{% if latest_store.duration_seconds %}{{ latest_store.duration_seconds }}s{% else %}—{% endif %}"
+          upload_id="{{ upload.id }}" />
+        {% endwith %}
+
+        <div class="pipeline-connector">
+          <svg width="48" height="2" viewBox="0 0 48 2" class="text-zinc-700">
+            <line x1="0" y1="1" x2="44" y2="1" stroke="currentColor" stroke-width="1.5"/>
+            <polygon points="44,0 48,1 44,2" fill="currentColor"/>
+          </svg>
+        </div>
+
+        {% with latest_bronze=bronze_attempts|last %}
+        <c-datasets.graph_node
+          step="bronze"
+          label="Bronze"
+          status="{% if bronze_ingestion %}{{ bronze_ingestion.status }}{% else %}pending{% endif %}"
+          duration="{% if latest_bronze.duration_seconds %}{{ latest_bronze.duration_seconds }}s{% else %}—{% endif %}"
+          upload_id="{{ upload.id }}" />
+        {% endwith %}
+      </div>
+    </div>
+
+    {% comment %}Node detail panel (expanded on click){% endcomment %}
+    <div id="node-detail" class="mb-6"></div>
+
+  </div>
+
+  {% comment %}Performance badge{% endcomment %}
+  <div class="mt-8 flex justify-end">
+    {% include "datasets/partials/perf_badge.html" %}
+  </div>
+</c-layout.app_shell>
+
+{% endblock %}

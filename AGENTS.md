@@ -149,3 +149,116 @@ the parquet was written to disk.
 
 do not change this to a processing timestamp, a UUID, or any other identifier.
 the filename is intentional filesystem-level lineage — readable without DB access.
+
+## Shared status enums
+
+core/choices.py defines two shared enums used across all pipeline layers:
+
+  PipelineStatus   used by: LandingUpload, BronzeIngestion, future Silver/Gold
+  TaskStatus       used by: LandingZoneTask, BronzeIngestionTask, future Silver/Gold
+
+Import from core.choices, never redefine locally. If you add a new pipeline
+model, use these enums for its status field — do not create a local Status
+class. PipelineTask.record_failure in core/tasks.py is typed to these enums.
+
+Never add a new status value to either enum without updating all models,
+admin list_filter definitions, and the status machine documentation.
+
+## Bronze app conventions
+
+### BronzeIngestion Task lifecycle
+
+BronzeIngestion.status uses PipelineStatus. Coarse-grained (COMPLETED/FAILED).
+BronzeIngestionTask.status uses TaskStatus. Tracks the attempt lifecycle.
+BronzeIngestionTask.phase uses BronzeIngestionPhase (in bronze/models.py)
+for granular DuckDB operation tracking:
+
+  attaching → counting_source → inserting → counting_ingested → completed
+
+Phase is updated via save(update_fields=["phase"]) at each checkpoint.
+
+### DuckDB connection management
+
+Always use the duckdb_pg_connect() context manager from bronze/tasks.py.
+Conn.close() must run in finally block — PostgreSQL connections leak otherwise.
+All DuckDB operations (ATTACH, COUNT, INSERT, SELECT) happen inside the context
+manager. All Django ORM operations happen outside.
+
+### DuckDB INSERT pattern
+
+  - Table name uses .format() — acceptable because snapshot_type is a
+    controlled TextChoices enum, not user input.
+  - All value parameters MUST use DuckDB positional placeholders ($1, $2, ...).
+  - Never use f-strings or .format() for values passed to DuckDB execute().
+  - DuckDB uses ::JSON, not ::JSONB. The PostgreSQL ATTACH layer handles
+    DuckDB JSON → PG JSONB mapping.
+
+### DuckDB exception taxonomy for ingest_to_bronze
+
+Non-retryable (catch in dedicated except block, set FAILED immediately):
+  duckdb.CatalogException       table missing → migration failure
+  duckdb.ConstraintException    PK/FK/unique violation → data integrity
+  duckdb.InvalidInputException  parquet schema mismatch → FM version drift
+  duckdb.NotImplementedException DuckDB feature gap → not transient
+
+Transient (fall through to generic except Exception + record_failure):
+  duckdb.IOException           parquet read glitches, filesystem blips
+  duckdb.OperationalError      PG timeouts, deadlocks, transient network
+  duckdb.ConnectionException   PG unreachable at ATTACH time
+
+Idempotency guard: early return with FAILED status, never raise.
+record_failure + raise for all other exceptions. Do not swallow.
+
+### Bronze data table creation
+
+RunSQL migration (0002_bronze_data_tables.py) creates bronze schema + tables.
+atomic = False — needed for CREATE INDEX CONCURRENTLY.
+Every RunSQL must have reverse_sql for rollback.
+CREATE TABLE and CREATE INDEX must be separate RunSQL operations.
+Schema changes go in new RunSQL migrations — never edit 0002.
+
+### Bronze progress fields
+
+BronzeIngestion has parse_progress_current (default 0), parse_progress_total (default 4),
+and parse_progress_description for frontend progress display — matching the LandingUpload
+pattern. The @property parse_progress_percent computes percentage.
+
+The 4-step phase-to-progress mapping:
+
+  | Step | Phase | Description |
+  |---|---|---|
+  | 1 | attaching | "Attaching to PostgreSQL" |
+  | 2 | counting_source | "Counting source parquet rows" |
+  | 3 | inserting | "Inserting into bronze table" |
+  | 4 | counting_ingested | "Verifying ingested row count" |
+  | final | completed | "Done" |
+
+Both phase (on BronzeIngestionTask) and progress fields (on BronzeIngestion) are updated
+at each checkpoint via save(update_fields=[...]). ProgressRecorder is NOT used for bronze
+— only DB fields are updated.
+
+### Bronze frontend visibility
+
+The bronze status poll view (bronze_status_poll in bronze/views.py) serves a partial
+template (bronze/partials/bronze_status.html) that HTMX polls every 2s. It appears in
+upload_status.html after the landing zone COMPLETED block. States:
+
+  - No record yet — "Bronze: Pending" with zinc dot
+  - Processing — amber pulsing dot, phase description with fade-slide-up animation,
+    progress bar via c-ui.progress
+  - Completed — green dot, row count
+  - Failed — red dot, error type + message
+
+The bronze_status.html partial omits hx-trigger when is_terminal, stopping the poll.
+
+### Bronze URL config
+
+apps/bronze/urls.py defines the bronze_status endpoint, included in config/urls.py.
+
+### Testing bronze
+
+Use real DuckDB and real PostgreSQL (Docker fm-warehouse). Never mock DuckDB.
+CELERY_TASK_ALWAYS_EAGER = True (set in root conftest.py) — tasks run inline.
+Test fixtures create parquet files with pandas, truncate bronze tables after
+each test via DuckDB ATTACH. Always use duckdb_pg_connect() context manager
+in fixtures to prevent connection leaks.
