@@ -1,5 +1,4 @@
 import time
-from contextlib import contextmanager
 
 import duckdb
 from celery import shared_task
@@ -7,7 +6,8 @@ from celery.utils.log import get_task_logger
 from django.utils import timezone
 
 from apps.core.choices import PipelineStatus, TaskStatus
-from apps.core.db import get_pg_conn_string
+from apps.core.db import duckdb_pg_connect, get_pg_conn_string
+from apps.core.metrics import pipeline_rows_processed, pipeline_task_duration
 from apps.core.tasks import PipelineTask
 from apps.datasets.models import DatasetEvent
 from .models import BronzeIngestion, BronzeIngestionTask, BronzeIngestionPhase
@@ -28,15 +28,6 @@ def dispatch_bronze_ingestion(upload):
     BronzeIngestion.objects.filter(id=ingestion.id).update(
         celery_task_id=result.id,
     )
-
-
-@contextmanager
-def duckdb_pg_connect():
-    conn = duckdb.connect()
-    try:
-        yield conn
-    finally:
-        conn.close()
 
 
 def run_bronze_append(upload, ingestion, task_row, conn, log_ctx):
@@ -77,11 +68,12 @@ def run_bronze_append(upload, ingestion, task_row, conn, log_ctx):
         f"""
         INSERT INTO {table}
             (ingestion_id, simulation_source, save_name, ingame_date,
-             upload_timestamp, snapshot_type, source_file_hash, raw_data)
+             upload_timestamp, snapshot_type, source_file_hash,
+             season, raw_data)
         SELECT
-            $1, $2, $3, $4::DATE, $5::TIMESTAMPTZ, $6, $7,
+            $1, $2, $3, $4::DATE, $5::TIMESTAMPTZ, $6, $7, $8,
             to_json(t)::JSON
-        FROM read_parquet($8) t
+        FROM read_parquet($9) t
         """,
         [
             ingestion.id,
@@ -91,6 +83,7 @@ def run_bronze_append(upload, ingestion, task_row, conn, log_ctx):
             upload.upload_timestamp.isoformat(),
             upload.snapshot_type,
             upload.source_file_hash,
+            upload.season,
             upload.parquet_path,
         ],
     )
@@ -122,7 +115,7 @@ def run_bronze_append(upload, ingestion, task_row, conn, log_ctx):
 @shared_task(
     bind=True,
     base=PipelineTask,
-    autoretry_for=(),
+    autoretry_for=(duckdb.IOException, duckdb.OperationalError, duckdb.ConnectionException),
     max_retries=3,
     retry_backoff=True,
     retry_jitter=True,
@@ -143,7 +136,7 @@ def ingest_to_bronze(self, ingestion_id: int) -> None:
         logger.warning(
             "Duplicate ingestion detected, returning early", extra=log_ctx
         )
-        ingestion.status = PipelineStatus.FAILED
+        ingestion.status = PipelineStatus.SKIPPED
         ingestion.error_type = "DuplicateIngestion"
         ingestion.error_message = (
             "A completed ingestion already exists for this upload."
@@ -212,18 +205,39 @@ def ingest_to_bronze(self, ingestion_id: int) -> None:
             },
         )
 
+        pipeline_task_duration.labels(
+            task_name="ingest_to_bronze",
+            snapshot_type=upload.snapshot_type,
+            status="completed",
+        ).observe(task_row.duration_seconds)
+        pipeline_rows_processed.labels(
+            layer="bronze",
+            snapshot_type=upload.snapshot_type,
+        ).inc(ingested_count)
+
+        from apps.silver.tasks import dispatch_silver_ingestion as _dispatch_silver
+        _dispatch_silver(ingestion)
+
     except (
         duckdb.CatalogException,
         duckdb.ConstraintException,
         duckdb.InvalidInputException,
         duckdb.NotImplementedException,
+        duckdb.ConversionException,
     ) as exc:
         logger.error(
             "Non-retryable: %s — investigate", type(exc).__name__,
             extra=log_ctx,
         )
         ingestion.status = PipelineStatus.FAILED
-        ingestion.save(update_fields=["status"])
+        ingestion.error_type = type(exc).__name__
+        ingestion.error_message = str(exc)
+        ingestion.parse_progress_description = "Failed"
+        ingestion.save(
+            update_fields=[
+                "status", "error_type", "error_message", "parse_progress_description"
+            ]
+        )
         task_row.status = TaskStatus.FAILED
         task_row.error_type = type(exc).__name__
         task_row.error_message = str(exc)
@@ -240,15 +254,35 @@ def ingest_to_bronze(self, ingestion_id: int) -> None:
                 "error_message": str(exc),
             },
         )
+
+        pipeline_task_duration.labels(
+            task_name="ingest_to_bronze",
+            snapshot_type=upload.snapshot_type,
+            status="failed",
+        ).observe(task_row.duration_seconds)
+
         raise
     except Exception as exc:
-        if self.request.retries < self.max_retries:
+        retryable = isinstance(exc, tuple(self.autoretry_for))
+        if not retryable:
+            logger.error(
+                "Non-retryable: %s — investigate", type(exc).__name__,
+                extra=log_ctx,
+            )
+        elif self.request.retries < self.max_retries:
             logger.warning(
                 "Retrying (attempt %d): %s", attempt, exc, extra=log_ctx
             )
         else:
             logger.error("Failed permanently: %s", exc, extra=log_ctx)
-        self.record_failure(ingestion, task_row, exc)
+        self.record_failure(ingestion, task_row, exc, retryable=retryable)
+
+        pipeline_task_duration.labels(
+            task_name="ingest_to_bronze",
+            snapshot_type=upload.snapshot_type,
+            status="failed",
+        ).observe(task_row.duration_seconds)
+
         DatasetEvent.objects.create(
             upload=upload,
             event_type=DatasetEvent.EventType.BRONZE_FAILED,

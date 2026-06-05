@@ -38,6 +38,7 @@ class LandingUploadAdmin(admin.ModelAdmin):
     list_display = (
         "save_master",
         "snapshot_type",
+        "season",
         "data_label",
         "ingame_date",
         "status",
@@ -64,11 +65,12 @@ class LandingUploadAdmin(admin.ModelAdmin):
 
     def _status_color(self, status):
         colors = {
-            "completed": "green",
-            "failed": "red",
-            "processing": "orange",
-            "retrying": "orange",
-            "pending": "gray",
+        "completed": "green",
+        "failed": "red",
+        "skipped": "gray",
+        "processing": "orange",
+        "retrying": "orange",
+        "pending": "gray",
         }
         return colors.get(status, "gray")
     list_filter = ("snapshot_type", "status", "simulation_source")
@@ -78,6 +80,8 @@ class LandingUploadAdmin(admin.ModelAdmin):
         "upload_timestamp",
         "file_size_bytes",
         "entry_task_id",
+        "error_type",
+        "error_message",
         "parse_progress_current",
         "parse_progress_total",
         "parse_progress_description",

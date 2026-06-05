@@ -15,6 +15,14 @@
   </div>
 
   <div class="mb-4">
+    <label class="block text-sm uppercase tracking-widest text-zinc-500 mb-2">Season</label>
+    {{ form.season }}
+    {% if form.season.errors %}
+      <div class="text-red-400 text-xs mt-1">{{ form.season.errors }}</div>
+    {% endif %}
+  </div>
+
+  <div class="mb-4">
     <label class="block text-sm uppercase tracking-widest text-zinc-500 mb-2">Data Label</label>
     {{ form.data_label }}
     {% if form.data_label.errors %}

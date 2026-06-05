@@ -16,6 +16,15 @@ class SnapshotUploadForm(forms.Form):
     ingame_date = forms.DateField(
         widget=forms.DateInput(attrs={"class": INPUT_CLASS, "type": "date"})
     )
+    season = forms.CharField(
+        max_length=20,
+        widget=forms.TextInput(
+            attrs={
+                "class": INPUT_CLASS,
+                "placeholder": "e.g. 2023-2024 or 1999-2000",
+            }
+        ),
+    )
     data_label = forms.CharField(
         max_length=255,
         widget=forms.TextInput(

@@ -53,6 +53,7 @@ def upload_snapshot(request, save_slug):
     upload = LandingUpload.objects.create(
         save_master=save,
         snapshot_type=snapshot_type,
+        season=form.cleaned_data["season"],
         ingame_date=form.cleaned_data["ingame_date"],
         data_label=form.cleaned_data["data_label"],
         simulation_source=save.game_version.game_version,
@@ -127,9 +128,10 @@ def upload_progress_fragment(request, upload_id):
         "upload": upload,
         "is_terminal": (
             upload.parse_progress_current >= upload.parse_progress_total
-            or upload.status in (
+            or             upload.status in (
                 LandingUpload.Status.COMPLETED,
                 LandingUpload.Status.FAILED,
+                LandingUpload.Status.SKIPPED,
             )
         ),
     })

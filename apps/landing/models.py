@@ -16,6 +16,7 @@ class LandingUpload(models.Model):
         RETRYING = "retrying", "Retrying"
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"
 
     save_master = models.ForeignKey(
         "core.SaveMaster",
@@ -26,7 +27,10 @@ class LandingUpload(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDING
     )
+    error_type = models.CharField(max_length=255, blank=True, default="")
+    error_message = models.TextField(blank=True, default="")
     ingame_date = models.DateField()
+    season = models.CharField(max_length=20)
     data_label = models.CharField(
         max_length=255,
         db_index=True,

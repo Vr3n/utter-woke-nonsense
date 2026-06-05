@@ -1,5 +1,6 @@
 <tr id="row-{{ upload.id }}" class="border-b border-zinc-800/50 hover:bg-white/[0.02]">
   <td class="px-6 py-5 text-sm text-zinc-100">{{ upload.ingame_date|date:"d/m/y" }}</td>
+  <td class="px-6 py-5 text-sm text-zinc-100">{{ upload.season }}</td>
   <td class="px-6 py-5 text-sm text-zinc-100">{{ upload.data_label }}</td>
   <td class="px-6 py-5 text-sm text-zinc-400 font-mono">{{ upload.source_file_name }}</td>
   <td class="px-6 py-5 text-sm text-zinc-400">{{ upload.simulation_source }}</td>
@@ -14,6 +15,9 @@
         <span class="text-xs uppercase tracking-widest text-amber-400">
           {{ upload.get_status_display }}
         </span>
+      {% elif upload.status == "skipped" %}
+        <div class="h-2 w-2 rounded-full bg-zinc-600"></div>
+        <span class="text-xs uppercase tracking-widest text-zinc-500">Skipped</span>
       {% elif upload.status == "failed" %}
         <div class="h-2 w-2 rounded-full bg-red-400"></div>
         <span class="text-xs uppercase tracking-widest text-red-400">Failed</span>

@@ -7,6 +7,7 @@ from .models import LandingUpload
 
 class LandingUploadTable(Table):
     ingame_date = DateColumn(verbose_name="Ingame Date")
+    season = Column(verbose_name="Season")
     data_label = Column(verbose_name="Label")
     source_file_name = Column(verbose_name="Source File")
     simulation_source = Column(verbose_name="Source")
@@ -15,7 +16,7 @@ class LandingUploadTable(Table):
 
     class Meta:
         model = LandingUpload
-        fields = ("ingame_date", "data_label", "source_file_name", "simulation_source", "upload_timestamp", "status")
+        fields = ("ingame_date", "season", "data_label", "source_file_name", "simulation_source", "upload_timestamp", "status")
         template_name = "django_tables2/tailwind_htmx.html"
         attrs = {
             "class": "w-full",
@@ -31,6 +32,7 @@ class LandingUploadTable(Table):
             "processing": ("bg-amber-400 animate-pulse", "text-amber-400"),
             "retrying": ("bg-amber-400 animate-pulse", "text-amber-400"),
             "failed": ("bg-red-400", "text-red-400"),
+            "skipped": ("bg-zinc-600", "text-zinc-500"),
             "pending": ("bg-zinc-600", "text-zinc-500"),
         }.get(value, ("bg-zinc-600", "text-zinc-500"))
 
