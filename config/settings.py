@@ -29,7 +29,7 @@ SECRET_KEY = env("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool("DEBUG", default=True)
 
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "host.docker.internal"])
 
 
 # Application definition
@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "apps.core",
     "apps.landing",
     "apps.bronze",
+    "apps.silver",
     "apps.datasets",
 ]
 
@@ -166,6 +167,11 @@ TAILWIND_STANDALONE_BUILD_COMMAND_ARGS = (
     "-i static_src/src/styles.css -o ../static/css/dist/styles.css --minify"
 )
 TAILWIND_CSS_PATH = "css/dist/styles.css"
+
+# Prometheus monitoring
+PROMETHEUS_MULTIPROC_DIR = env.str(
+    "PROMETHEUS_MULTIPROC_DIR", default="/tmp/prometheus_metrics"
+)
 
 # Landing Zone
 DATASOURCE_ROOT = BASE_DIR / "datasource"

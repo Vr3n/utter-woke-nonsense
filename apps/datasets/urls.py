@@ -14,14 +14,14 @@ urlpatterns = [
         name="dataset_detail",
     ),
     path(
-        "hx/datasets/sse/<int:upload_id>/",
-        views.event_stream,
-        name="dataset_event_stream",
+        "hx/datasets/<slug:save_slug>/pipeline-status/<int:upload_id>/",
+        views.dataset_pipeline_poll,
+        name="dataset_pipeline_poll",
     ),
     path(
-        "hx/datasets/sse/save/<slug:save_slug>/",
-        views.listing_event_stream,
-        name="dataset_listing_stream",
+        "hx/datasets/sections/<slug:save_slug>/",
+        views.dataset_list_sections,
+        name="dataset_list_sections",
     ),
     path(
         "hx/datasets/node/<int:upload_id>/<str:step>/",
@@ -32,5 +32,10 @@ urlpatterns = [
         "hx/datasets/row/<int:upload_id>/",
         views.listing_row_partial,
         name="dataset_listing_row",
+    ),
+    path(
+        "<slug:save_slug>/datasets/<int:upload_id>/retry/",
+        views.retry_landing,
+        name="retry_landing",
     ),
 ]

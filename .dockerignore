@@ -1,8 +1,45 @@
-.venv/
+# Version control
 .git/
+.gitignore
 
-prompts/
+# Python bytecode & caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environment (rebuilt inside Docker)
+.venv/
+
+# Environment / secrets
+.env
+.env.docker
+.env.local
+
+# Docker tooling
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Docs / design prompts
+*.md
 docs/
+prompts/
 
-.env.example
+# Monitoring (separate containers in compose)
+grafana/
+prometheus/
+
+# Runtime data (mounted as volume in compose)
+datasource/
+
+# Celery runtime artifact
 celerybeat-schedule
+
+# Python packaging artifacts
+*.egg-info/
+
+# OS files
+.DS_Store
+Thumbs.db

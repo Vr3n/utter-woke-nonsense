@@ -34,71 +34,8 @@
     <c-metrics.metric_card label="P95 Latency" value="{{ p95_latency }}" color="cyan" />
   </section>
 
-  {% comment %}SSE container for live updates{% endcomment %}
-  <div id="listing-sse"
-       hx-ext="sse"
-       sse-connect="{% url 'dataset_listing_stream' save_slug=save.slug %}"
-       sse-swap="dataset-event"
-       hx-swap="none">
-
-    {% comment %}Section 1: Active / Failed{% endcomment %}
-    <div class="mb-8">
-      <div class="mb-4 flex items-center gap-3 border-b border-zinc-800 pb-3">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-red-400 font-bold">Active / Failed</h2>
-        <c-ui.badge>{{ active_failed|length }}</c-ui.badge>
-      </div>
-      {% if active_failed %}
-        <div class="border border-zinc-800 divide-y divide-zinc-800/50">
-          {% for upload in active_failed %}
-            {% include "datasets/partials/listing_row.html" %}
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="border border-zinc-800 bg-zinc-950 px-6 py-8 text-center">
-          <span class="text-sm uppercase tracking-[0.2em] text-zinc-700">No items</span>
-        </div>
-      {% endif %}
-    </div>
-
-    {% comment %}Section 2: Completed Landing Zones{% endcomment %}
-    <div class="mb-8">
-      <div class="mb-4 flex items-center gap-3 border-b border-zinc-800 pb-3">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-zinc-400 font-bold">Completed Landing Zones</h2>
-        <c-ui.badge>{{ completed_landing|length }}</c-ui.badge>
-      </div>
-      {% if completed_landing %}
-        <div class="border border-zinc-800 divide-y divide-zinc-800/50">
-          {% for upload in completed_landing %}
-            {% include "datasets/partials/listing_row.html" %}
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="border border-zinc-800 bg-zinc-950 px-6 py-8 text-center">
-          <span class="text-sm uppercase tracking-[0.2em] text-zinc-700">No items</span>
-        </div>
-      {% endif %}
-    </div>
-
-    {% comment %}Section 3: Completed Bronze{% endcomment %}
-    <div class="mb-8">
-      <div class="mb-4 flex items-center gap-3 border-b border-zinc-800 pb-3">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-emerald-400 font-bold">Completed Bronze</h2>
-        <c-ui.badge>{{ completed_bronze|length }}</c-ui.badge>
-      </div>
-      {% if completed_bronze %}
-        <div class="border border-zinc-800 divide-y divide-zinc-800/50">
-          {% for upload in completed_bronze %}
-            {% include "datasets/partials/listing_row.html" %}
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="border border-zinc-800 bg-zinc-950 px-6 py-8 text-center">
-          <span class="text-sm uppercase tracking-[0.2em] text-zinc-700">No items</span>
-        </div>
-      {% endif %}
-    </div>
-
-  </div>
+  {% comment %}Listing sections (per-row polling, re-sorts on transition){% endcomment %}
+  {% include "datasets/partials/listing_sections.html" %}
 
   {% comment %}Performance badge{% endcomment %}
   <div class="mt-8 flex justify-end">

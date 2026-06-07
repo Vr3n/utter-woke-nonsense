@@ -1,11 +1,22 @@
+import os
 from collections import OrderedDict
 
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django_htmx.http import trigger_client_event
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
+from prometheus_client.multiprocess import MultiProcessCollector
 
 from .filters import SaveFilter
 from .forms import SaveCreateForm
 from .models import SaveMaster
+
+
+def metrics_view(request):
+    if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+        MultiProcessCollector(REGISTRY)
+    latest = generate_latest(REGISTRY)
+    return HttpResponse(latest, content_type=CONTENT_TYPE_LATEST)
 
 
 def home(request):

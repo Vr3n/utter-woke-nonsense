@@ -17,14 +17,16 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
-from apps.core.views import home, save_create_partial, save_detail, save_list_partial
+from apps.core.views import home, metrics_view, save_create_partial, save_detail, save_list_partial
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('metrics/', metrics_view, name='metrics'),
     path('', home, name='home'),
     path('partials/saves/', save_list_partial, name='save_list_partial'),
     path('partials/saves/create/', save_create_partial, name='save_create_partial'),
     path('', include('apps.bronze.urls')),
+    path('', include('apps.silver.urls')),
     path('', include('apps.landing.urls')),
     path('', include('apps.datasets.urls')),
     path('<slug:save_slug>/', save_detail, name='save_detail'),

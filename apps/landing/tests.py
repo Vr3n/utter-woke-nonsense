@@ -6,7 +6,9 @@ import pandas as pd
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
 
+from apps.core.choices import TaskStatus
 from apps.core.models import FootballManagerVersionMaster, SaveMaster
 
 from .converter import ConversionContext, CsvConversionStrategy, HtmlConversionStrategy
@@ -106,6 +108,7 @@ def test_upload_creates_landing_upload_record(client, save, sample_csv):
         {
             "snapshot_type": "squad_snapshot",
             "ingame_date": "2028-07-15",
+            "season": "2028-2029",
             "data_label": "summer_squad",
             "source_file": sample_csv,
         },
@@ -127,6 +130,7 @@ def test_upload_returns_202(client, save, sample_csv):
         {
             "snapshot_type": "squad_snapshot",
             "ingame_date": "2028-07-15",
+            "season": "2028-2029",
             "data_label": "summer_squad",
             "source_file": sample_csv,
         },
@@ -141,6 +145,7 @@ def test_duplicate_file_hash_rejected(client, save, sample_csv):
         {
             "snapshot_type": "squad_snapshot",
             "ingame_date": "2028-07-15",
+            "season": "2028-2029",
             "data_label": "summer_squad",
             "source_file": sample_csv,
         },
@@ -157,6 +162,7 @@ def test_duplicate_file_hash_rejected(client, save, sample_csv):
         {
             "snapshot_type": "squad_snapshot",
             "ingame_date": "2028-07-15",
+            "season": "2028-2029",
             "data_label": "summer_squad",
             "source_file": duplicate,
         },
@@ -398,12 +404,14 @@ def test_store_parquet_file_exists_error(save, settings):
         store_parquet(upload_id=upload.id)
 
     upload.refresh_from_db()
-    assert upload.status == LandingUpload.Status.PROCESSING
+    assert upload.status == LandingUpload.Status.FAILED
+    assert upload.error_type == "FileExistsError"
+    assert "already exists" in upload.error_message
 
     task_row = LandingZoneTask.objects.get(upload=upload, step="store", attempt=1)
-    assert task_row.status == "running"
-    assert not task_row.error_type
-    assert task_row.finished_at is None
+    assert task_row.status == TaskStatus.FAILED
+    assert task_row.error_type == "FileExistsError"
+    assert task_row.finished_at is not None
 
 
 @pytest.mark.django_db
@@ -415,12 +423,14 @@ def test_store_parquet_file_not_found_error(save):
         store_parquet(upload_id=upload.id)
 
     upload.refresh_from_db()
-    assert upload.status == LandingUpload.Status.PROCESSING
+    assert upload.status == LandingUpload.Status.FAILED
+    assert upload.error_type == "FileNotFoundError"
+    assert "missing" in upload.error_message
 
     task_row = LandingZoneTask.objects.get(upload=upload, step="store", attempt=1)
-    assert task_row.status == "running"
-    assert not task_row.error_type
-    assert task_row.finished_at is None
+    assert task_row.status == TaskStatus.FAILED
+    assert task_row.error_type == "FileNotFoundError"
+    assert task_row.finished_at is not None
 
 
 # === dispatch_pipeline / chain end-to-end tests ===
@@ -462,6 +472,7 @@ def test_upload_view_saves_file_and_dispatches(client, save, sample_csv):
         {
             "snapshot_type": "squad_snapshot",
             "ingame_date": "2028-07-15",
+            "season": "2028-2029",
             "data_label": "summer_squad",
             "source_file": sample_csv,
         },
@@ -500,13 +511,19 @@ def test_progress_fields_update_at_each_step(mock_logger, mock_recorder_cls, sav
 
 @patch("apps.landing.tasks.ProgressRecorder")
 @pytest.mark.django_db
-def test_progress_fragment_returns_polling_during_process(mock_recorder_cls, save, settings, client_logged_in):
+def test_pipeline_status_poll_shows_progress_during_processing(mock_recorder_cls, save, settings, client_logged_in):
     upload = _create_upload(save, status=LandingUpload.Status.PROCESSING)
     upload.parse_progress_current = 1
     upload.parse_progress_description = "Parsing the file"
     upload.save(update_fields=["status", "parse_progress_current", "parse_progress_description"])
 
-    resp = client_logged_in.get(f"/hx/progress/{upload.id}/")
+    resp = client_logged_in.get(
+        reverse("pipeline_status_poll", kwargs={
+            "save_slug": save.slug,
+            "snapshot_type": "squad_snapshot",
+            "upload_id": upload.id,
+        })
+    )
     assert resp.status_code == 200
     content = resp.content.decode()
     assert "hx-trigger" in content
@@ -515,13 +532,19 @@ def test_progress_fragment_returns_polling_during_process(mock_recorder_cls, sav
 
 
 @pytest.mark.django_db
-def test_progress_fragment_returns_done_when_complete(save, settings, client_logged_in):
+def test_pipeline_status_poll_returns_done_when_complete(save, settings, client_logged_in):
     upload = _create_upload(save, status=LandingUpload.Status.COMPLETED)
     upload.parse_progress_current = 3
     upload.parse_progress_description = "Done"
     upload.save(update_fields=["status", "parse_progress_current", "parse_progress_description"])
 
-    resp = client_logged_in.get(f"/hx/progress/{upload.id}/")
+    resp = client_logged_in.get(
+        reverse("pipeline_status_poll", kwargs={
+            "save_slug": save.slug,
+            "snapshot_type": "squad_snapshot",
+            "upload_id": upload.id,
+        })
+    )
     assert resp.status_code == 200
     content = resp.content.decode()
     assert "hx-trigger" not in content
@@ -529,13 +552,19 @@ def test_progress_fragment_returns_done_when_complete(save, settings, client_log
 
 
 @pytest.mark.django_db
-def test_progress_fragment_returns_done_when_failed(save, settings, client_logged_in):
+def test_pipeline_status_poll_returns_done_when_failed(save, settings, client_logged_in):
     upload = _create_upload(save, status=LandingUpload.Status.FAILED)
     upload.parse_progress_current = 2
     upload.parse_progress_description = "Converting to Parquet"
     upload.save(update_fields=["status", "parse_progress_current", "parse_progress_description"])
 
-    resp = client_logged_in.get(f"/hx/progress/{upload.id}/")
+    resp = client_logged_in.get(
+        reverse("pipeline_status_poll", kwargs={
+            "save_slug": save.slug,
+            "snapshot_type": "squad_snapshot",
+            "upload_id": upload.id,
+        })
+    )
     assert resp.status_code == 200
     content = resp.content.decode()
     assert "hx-trigger" not in content
@@ -543,13 +572,19 @@ def test_progress_fragment_returns_done_when_failed(save, settings, client_logge
 
 
 @pytest.mark.django_db
-def test_progress_fragment_accessible_by_id(save, settings, client):
+def test_pipeline_status_poll_accessible_by_id(save, settings, client):
     upload = _create_upload(save, status=LandingUpload.Status.COMPLETED)
     upload.parse_progress_current = 3
     upload.parse_progress_description = "Done"
     upload.save(update_fields=["status", "parse_progress_current", "parse_progress_description"])
 
-    resp = client.get(f"/hx/progress/{upload.id}/")
+    resp = client.get(
+        reverse("pipeline_status_poll", kwargs={
+            "save_slug": save.slug,
+            "snapshot_type": "squad_snapshot",
+            "upload_id": upload.id,
+        })
+    )
     assert resp.status_code == 200
     content = resp.content.decode()
     assert "Done" in content
@@ -557,7 +592,7 @@ def test_progress_fragment_accessible_by_id(save, settings, client):
 
 
 @pytest.mark.django_db
-def test_status_poll_shows_last_error_on_failure(save, client):
+def test_pipeline_status_poll_shows_last_error_on_failure(save, client):
     upload = _create_upload(save, status=LandingUpload.Status.FAILED)
     LandingZoneTask.objects.create(
         upload=upload,
@@ -570,7 +605,13 @@ def test_status_poll_shows_last_error_on_failure(save, client):
         finished_at=None,
     )
 
-    resp = client.get(f"/hx/{save.slug}/squad_snapshot/status/{upload.id}/")
+    resp = client.get(
+        reverse("pipeline_status_poll", kwargs={
+            "save_slug": save.slug,
+            "snapshot_type": "squad_snapshot",
+            "upload_id": upload.id,
+        })
+    )
     assert resp.status_code == 200
     content = resp.content.decode()
     assert "ValueError" in content
@@ -578,8 +619,14 @@ def test_status_poll_shows_last_error_on_failure(save, client):
 
 
 @pytest.mark.django_db
-def test_retrying_status_renders_in_template(save, client):
+def test_pipeline_status_poll_retrying_status(save, client):
     upload = _create_upload(save, status=LandingUpload.Status.RETRYING)
-    resp = client.get(f"/hx/{save.slug}/squad_snapshot/status/{upload.id}/")
+    resp = client.get(
+        reverse("pipeline_status_poll", kwargs={
+            "save_slug": save.slug,
+            "snapshot_type": "squad_snapshot",
+            "upload_id": upload.id,
+        })
+    )
     assert resp.status_code == 200
     assert "Retrying" in resp.content.decode()

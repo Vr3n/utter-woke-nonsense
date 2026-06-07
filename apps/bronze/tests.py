@@ -6,6 +6,7 @@ import duckdb
 import pytest
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.choices import PipelineStatus, TaskStatus
@@ -217,6 +218,53 @@ class TestDispatchBronzeIngestion:
         mock_delay.assert_called_once_with(ingestion.id)
 
 
+# ===================================================================
+# dispatch_bronze View
+# ===================================================================
+
+class TestDispatchBronzeView:
+    def test_dispatches_bronze_on_POST(self, client, db, completed_upload):
+        with patch("apps.bronze.tasks.ingest_to_bronze.delay") as mock_delay:
+            mock_delay.return_value.id = "mock-task-id"
+            response = client.post(
+                reverse("bronze:dispatch_bronze", kwargs={"upload_id": completed_upload.id})
+            )
+        assert response.status_code == 200
+        assert response.context["bronze"] is not None
+        assert response.context["bronze"].status == PipelineStatus.PROCESSING
+
+    def test_returns_existing_status_for_processing(self, client, completed_upload):
+        from .models import BronzeIngestion
+
+        existing = BronzeIngestion.objects.create(
+            landing_upload=completed_upload,
+            status=PipelineStatus.PROCESSING,
+            simulation_source="FM24",
+            snapshot_type="squad_snapshot",
+            source_file_hash="test_hash_for_bronze",
+        )
+        with patch("apps.bronze.tasks.ingest_to_bronze.delay") as mock_delay:
+            mock_delay.return_value.id = "mock-task-id"
+            response = client.post(
+                reverse("bronze:dispatch_bronze", kwargs={"upload_id": completed_upload.id})
+            )
+        assert response.status_code == 200
+        mock_delay.assert_not_called()
+        assert response.context["bronze"] == existing
+
+    def test_404_when_upload_missing(self, client):
+        response = client.post(
+            reverse("bronze:dispatch_bronze", kwargs={"upload_id": 99999})
+        )
+        assert response.status_code == 404
+
+    def test_requires_POST(self, client, db, completed_upload):
+        response = client.get(
+            reverse("bronze:dispatch_bronze", kwargs={"upload_id": completed_upload.id})
+        )
+        assert response.status_code == 405
+
+
 class TestIngestToBronzeIdempotency:
     def test_completed_ingestion_for_same_upload_returns_early(
         self, completed_upload, bronze_ingestion
@@ -247,7 +295,7 @@ class TestIngestToBronzeIdempotency:
             ingest_to_bronze(new_ingestion.id)
 
         new_ingestion.refresh_from_db()
-        assert new_ingestion.status == PipelineStatus.FAILED
+        assert new_ingestion.status == PipelineStatus.SKIPPED
         assert new_ingestion.error_type == "DuplicateIngestion"
 
 
@@ -257,8 +305,11 @@ def squad_parquet(tmp_path):
     import pandas as pd
 
     df = pd.DataFrame({
-        "name": ["Player A", "Player B", "Player C"],
-        "age": [25, 22, 30],
+        "Unique ID": ["1001", "1002", "1003"],
+        "Player": ["Player A", "Player B", "Player C"],
+        "Club": ["FC Barcelona", "Real Madrid", "Atletico Madrid"],
+        "Division": ["La Liga", "La Liga", "La Liga"],
+        "Age": ["25", "22", "30"],
         "value": ["10M", "8M", "15M"],
         "position": ["GK", "DF", "FW"],
     })
@@ -354,14 +405,15 @@ def clear_bronze_tables(bronze_data_tables):
     pg_conn = get_pg_conn_string()
     conn = duckdb.connect()
     try:
-        conn.execute(f"ATTACH '{pg_conn}' AS bronze_schema (TYPE postgres)")
-        conn.execute("TRUNCATE bronze_schema.bronze.squad_snapshot;")
-        conn.execute("TRUNCATE bronze_schema.bronze.scouting_snapshot;")
-        conn.execute("TRUNCATE bronze_schema.bronze.squad_matchstats_snapshot;")
+        conn.execute(f"ATTACH '{pg_conn}' AS ds (TYPE postgres)")
+        conn.execute("TRUNCATE ds.bronze.squad_snapshot;")
+        conn.execute("TRUNCATE ds.bronze.scouting_snapshot;")
+        conn.execute("TRUNCATE ds.bronze.squad_matchstats_snapshot;")
     finally:
         conn.close()
 
 
+@pytest.mark.django_db(transaction=True)
 class TestIngestToBronzeSuccess:
     def test_inserts_rows_into_bronze_table(
         self, bronze_ingestion_processing, squad_parquet
@@ -384,7 +436,7 @@ class TestIngestToBronzeSuccess:
         assert ingestion.status == PipelineStatus.COMPLETED
         assert ingestion.source_row_count == 3
         assert ingestion.ingested_row_count == 3
-        assert ingestion.column_count == 4
+        assert ingestion.column_count == 7
 
         pg_conn = get_pg_conn_string()
         conn = duckdb.connect()
@@ -541,12 +593,15 @@ class TestIngestToBronzeErrorHandling:
 
         ingestion.refresh_from_db()
         assert ingestion.status == PipelineStatus.FAILED
+        assert ingestion.error_type == "CatalogException"
+        assert "does not exist" in ingestion.error_message
 
         from .models import BronzeIngestionTask
         task_row = BronzeIngestionTask.objects.get(
             ingestion=ingestion, attempt=1
         )
         assert task_row.status == TaskStatus.FAILED
+        assert task_row.error_type == "CatalogException"
 
 
 class TestBronzeIngestionPhase:
@@ -565,6 +620,7 @@ class TestBronzeIngestionPhase:
             assert phase.label == label
 
 
+@pytest.mark.django_db(transaction=True)
 class TestEndToEndPipeline:
     def test_full_csv_to_bronze_pipeline(
         self, save, tmp_path, settings, bronze_data_tables
@@ -594,7 +650,10 @@ class TestEndToEndPipeline:
         incoming_dir = Path(upload.incoming_path()).parent
         incoming_dir.mkdir(parents=True, exist_ok=True)
         Path(upload.incoming_path()).write_text(
-            "name,age,value\nPlayer A,25,10M\nPlayer B,22,8M\nPlayer C,30,15M"
+            "Unique ID,Player,Club,Division,Age,value,position\n"
+            "1001,Player A,FC Barcelona,La Liga,25,10M,GK\n"
+            "1002,Player B,Real Madrid,La Liga,22,8M,DF\n"
+            "1003,Player C,Atletico Madrid,La Liga,30,15M,FW"
         )
 
         parse_file(upload_id=upload.id)

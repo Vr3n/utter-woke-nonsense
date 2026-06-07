@@ -3,7 +3,6 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path("hx/progress/<int:upload_id>/", views.upload_progress_fragment, name="upload_progress"),
     path("hx/<slug:save_slug>/upload/", views.upload_snapshot, name="upload_snapshot"),
     path(
         "hx/<slug:save_slug>/<str:snapshot_type>/table/",
@@ -11,9 +10,9 @@ urlpatterns = [
         name="upload_table_partial",
     ),
     path(
-        "hx/<slug:save_slug>/<str:snapshot_type>/status/<int:upload_id>/",
-        views.upload_status_poll,
-        name="upload_status_poll",
+        "hx/<slug:save_slug>/<str:snapshot_type>/pipeline-status/<int:upload_id>/",
+        views.pipeline_status_poll,
+        name="pipeline_status_poll",
     ),
 
     path(

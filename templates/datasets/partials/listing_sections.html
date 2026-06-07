@@ -1,0 +1,82 @@
+<div id="listing-sections"
+     hx-trigger="datasets-changed from:body throttle:2s"
+     hx-get="{% url 'dataset_list_sections' save_slug=save.slug %}"
+     hx-target="this"
+     hx-swap="outerHTML">
+
+  {% comment %}Section 1: Active / Failed{% endcomment %}
+  <div class="mb-8">
+    <div class="mb-4 flex items-center gap-3 border-b border-zinc-800 pb-3">
+      <h2 class="text-sm uppercase tracking-[0.2em] text-red-400 font-bold">Active / Failed</h2>
+      <c-ui.badge>{{ active_failed|length }}</c-ui.badge>
+    </div>
+    {% if active_failed %}
+      <div class="border border-zinc-800 divide-y divide-zinc-800/50">
+        {% for upload in active_failed %}
+          {% include "datasets/partials/listing_row.html" %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="border border-zinc-800 bg-zinc-950 px-6 py-8 text-center">
+        <span class="text-sm uppercase tracking-[0.2em] text-zinc-700">No items</span>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %}Section 2: Awaiting Ingestion{% endcomment %}
+  <div class="mb-8">
+    <div class="mb-4 flex items-center gap-3 border-b border-zinc-800 pb-3">
+      <h2 class="text-sm uppercase tracking-[0.2em] text-zinc-400 font-bold">Awaiting Ingestion</h2>
+      <c-ui.badge>{{ awaiting_ingestion|length }}</c-ui.badge>
+    </div>
+    {% if awaiting_ingestion %}
+      <div class="border border-zinc-800 divide-y divide-zinc-800/50">
+        {% for upload in awaiting_ingestion %}
+          {% include "datasets/partials/listing_row.html" %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="border border-zinc-800 bg-zinc-950 px-6 py-8 text-center">
+        <span class="text-sm uppercase tracking-[0.2em] text-zinc-700">No items</span>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %}Section 3: Awaiting Transformation{% endcomment %}
+  <div class="mb-8">
+    <div class="mb-4 flex items-center gap-3 border-b border-zinc-800 pb-3">
+      <h2 class="text-sm uppercase tracking-[0.2em] text-amber-400 font-bold">Awaiting Transformation</h2>
+      <c-ui.badge>{{ awaiting_transformation|length }}</c-ui.badge>
+    </div>
+    {% if awaiting_transformation %}
+      <div class="border border-zinc-800 divide-y divide-zinc-800/50">
+        {% for upload in awaiting_transformation %}
+          {% include "datasets/partials/listing_row.html" %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="border border-zinc-800 bg-zinc-950 px-6 py-8 text-center">
+        <span class="text-sm uppercase tracking-[0.2em] text-zinc-700">No items</span>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %}Section 4: Fully Processed{% endcomment %}
+  <div class="mb-8">
+    <div class="mb-4 flex items-center gap-3 border-b border-zinc-800 pb-3">
+      <h2 class="text-sm uppercase tracking-[0.2em] text-emerald-400 font-bold">Fully Processed</h2>
+      <c-ui.badge>{{ fully_processed|length }}</c-ui.badge>
+    </div>
+    {% if fully_processed %}
+      <div class="border border-zinc-800 divide-y divide-zinc-800/50">
+        {% for upload in fully_processed %}
+          {% include "datasets/partials/listing_row.html" %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="border border-zinc-800 bg-zinc-950 px-6 py-8 text-center">
+        <span class="text-sm uppercase tracking-[0.2em] text-zinc-700">No items</span>
+      </div>
+    {% endif %}
+  </div>
+</div>

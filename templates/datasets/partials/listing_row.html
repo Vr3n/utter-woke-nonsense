@@ -1,5 +1,10 @@
+<div id="upload-row-{{ upload.id }}"
+     {% if upload.status != "failed" and upload.status != "skipped" and upload.silver_status != "completed" %}
+     hx-trigger="every 4s"
+     hx-get="{% url 'dataset_listing_row' upload_id=upload.id %}"
+     hx-swap="outerHTML"
+     {% endif %}>
 <a href="{% url 'dataset_detail' save_slug=save.slug upload_id=upload.id %}"
-   id="upload-row-{{ upload.id }}"
    class="flex items-center gap-6 px-6 py-4 transition-colors hover:bg-zinc-900/50 group">
 
   {% comment %}Status dots{% endcomment %}
@@ -8,6 +13,7 @@
     <span class="inline-block w-2.5 h-2.5 rounded-full
       {% if upload.status == 'completed' %}bg-emerald-400
       {% elif upload.status == 'failed' %}bg-red-400
+      {% elif upload.status == 'skipped' %}bg-zinc-600
       {% elif upload.status == 'pending' %}bg-zinc-700
       {% else %}bg-amber-400{% endif %}"
       title="Source: {{ upload.status }}">
@@ -37,10 +43,22 @@
     <span class="inline-block w-2.5 h-2.5 rounded-full
       {% if upload.bronze_status == 'completed' %}bg-emerald-400
       {% elif upload.bronze_status == 'failed' %}bg-red-400
+      {% elif upload.bronze_status == 'skipped' %}bg-zinc-600
       {% elif upload.bronze_status == 'processing' or upload.bronze_status == 'retrying' %}bg-amber-400
       {% elif upload.bronze_status == 'pending' and upload.status == 'completed' %}bg-amber-400
       {% else %}bg-zinc-700{% endif %}"
       title="Bronze: {{ upload.bronze_status|default:'pending' }}">
+    </span>
+
+    {% comment %}Silver dot{% endcomment %}
+    <span class="inline-block w-2.5 h-2.5 rounded-full
+      {% if upload.silver_status == 'completed' %}bg-emerald-400
+      {% elif upload.silver_status == 'failed' %}bg-red-400
+      {% elif upload.silver_status == 'skipped' %}bg-zinc-600
+      {% elif upload.silver_status == 'processing' or upload.silver_status == 'retrying' %}bg-amber-400
+      {% elif upload.silver_status is None and upload.bronze_status == 'completed' %}bg-zinc-600
+      {% else %}bg-zinc-700{% endif %}"
+      title="Silver: {{ upload.silver_status|default:'pending' }}">
     </span>
   </div>
 
@@ -70,4 +88,19 @@
   <div class="w-32 text-right">
     <span class="text-xs text-zinc-600 font-mono">{{ upload.upload_timestamp|date:"H:i" }}</span>
   </div>
+
+  {% comment %}Actions{% endcomment %}
+  <div class="w-28 text-right">
+    {% if upload.bronze_status == 'completed' and upload.silver_status != 'completed' and upload.silver_status != 'processing' %}
+      <button
+        class="text-[10px] uppercase tracking-[0.2em] px-2.5 py-1.5 border border-zinc-700 text-zinc-400 transition-colors hover:border-violet-500 hover:text-violet-400 active:scale-[0.97]"
+        hx-post="{% url 'silver:dispatch_silver' upload_id=upload.id %}"
+        hx-target="#upload-row-{{ upload.id }}"
+        hx-swap="outerHTML"
+        hx-indicator="#upload-row-{{ upload.id }}">
+        Process
+      </button>
+    {% endif %}
+  </div>
 </a>
+</div>

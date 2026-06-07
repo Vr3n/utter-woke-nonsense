@@ -1,29 +1,31 @@
-import json
-import time
-
 from django.db import connection
 from django.db.models import OuterRef, Subquery
-from django.http import StreamingHttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from apps.bronze.models import BronzeIngestion, BronzeIngestionTask
 from apps.core.models import SaveMaster
 from apps.landing.models import LandingUpload, LandingZoneTask
+from apps.landing.pipeline import get_pipeline_status
+from apps.landing.tasks import dispatch_pipeline
+from apps.silver.models import SilverIngestion
 
-from .models import DatasetEvent
 from .perf import CaptureQueries
 
 
 def _compute_p95_latency(save):
-    """Seconds at the 95th percentile of completed bronze pipeline duration."""
+    """Seconds at the 95th percentile of end-to-end pipeline duration (through silver when available)."""
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            SELECT EXTRACT(EPOCH FROM (bi.completed_at - lu.upload_timestamp))
+            SELECT EXTRACT(EPOCH FROM (
+              COALESCE(si.completed_at, bi.completed_at) - lu.upload_timestamp
+            ))
             FROM bronze_bronzeingestion bi
             JOIN landing_landingupload lu ON lu.id = bi.landing_upload_id
+            LEFT JOIN silver_silveringestion si ON si.bronze_ingestion_id = bi.id
             WHERE lu.save_master_id = %s
-              AND bi.status = 'completed'
               AND bi.completed_at IS NOT NULL
               AND lu.upload_timestamp IS NOT NULL
             ORDER BY 1
@@ -60,15 +62,7 @@ def _phase_dots(upload):
     return phases
 
 
-def dataset_list(request, save_slug):
-    save = get_object_or_404(
-        SaveMaster.objects.select_related("game_version"), slug=save_slug
-    )
-    saves = SaveMaster.objects.select_related("game_version").order_by("-updated_at")
-    active_team = (
-        save.managed_teams.filter(is_active=True).select_related("team").first()
-    )
-
+def _get_listing_sections(save):
     parse_task = LandingZoneTask.objects.filter(
         upload=OuterRef("pk"), step="parse"
     ).order_by("-attempt")
@@ -81,6 +75,9 @@ def dataset_list(request, save_slug):
     bronze_task = BronzeIngestionTask.objects.filter(
         ingestion__landing_upload=OuterRef("pk")
     ).order_by("-ingestion__started_at", "-attempt")
+    silver = SilverIngestion.objects.filter(
+        bronze_ingestion__landing_upload=OuterRef("pk")
+    ).order_by("-started_at")
 
     with CaptureQueries() as perf:
         uploads = list(
@@ -110,50 +107,76 @@ def dataset_list(request, save_slug):
                 bronze_task_error_message=Subquery(
                     bronze_task.values("error_message")[:1]
                 ),
+                silver_status=Subquery(silver.values("status")[:1]),
             )
         )
 
     active_failed = []
-    completed_landing = []
-    completed_bronze = []
+    awaiting_ingestion = []
+    awaiting_transformation = []
+    fully_processed = []
 
     for u in uploads:
-        if u.status == "completed":
-            completed_landing.append(u)
-            if u.bronze_status == "completed":
-                completed_bronze.append(u)
-        else:
+        if u.status != "completed":
             active_failed.append(u)
+        elif u.silver_status == "completed":
+            fully_processed.append(u)
+        elif u.bronze_status == "completed":
+            awaiting_transformation.append(u)
+        else:
+            awaiting_ingestion.append(u)
 
     total_uploads = len(uploads)
-    completed_count = sum(
-        1 for u in uploads if u.status == "completed"
-    )
-    health = round((completed_count / total_uploads * 100)) if total_uploads else 0
+    fully_processed_count = len(fully_processed)
+    health = round((fully_processed_count / total_uploads * 100)) if total_uploads else 0
     backlog = sum(
         1
         for u in uploads
-        if u.status in ("pending", "processing", "retrying")
+        if u.status in ("pending", "processing", "retrying", "skipped")
     )
     data_volume = sum(u.file_size_bytes or 0 for u in uploads)
+
+    return {
+        "active_failed": active_failed,
+        "awaiting_ingestion": awaiting_ingestion,
+        "awaiting_transformation": awaiting_transformation,
+        "fully_processed": fully_processed,
+        "perf": perf,
+        "health": health,
+        "backlog": backlog,
+        "data_volume": _human_size(data_volume),
+        "total_uploads": total_uploads,
+    }
+
+
+def dataset_list(request, save_slug):
+    save = get_object_or_404(
+        SaveMaster.objects.select_related("game_version"), slug=save_slug
+    )
+    saves = SaveMaster.objects.select_related("game_version").order_by("-updated_at")
+    active_team = (
+        save.managed_teams.filter(is_active=True).select_related("team").first()
+    )
     p95 = _compute_p95_latency(save)
+    sections = _get_listing_sections(save)
 
     context = {
         "save": save,
         "saves": saves,
         "active_team": active_team,
-        "active_failed": active_failed,
-        "completed_landing": completed_landing,
-        "completed_bronze": completed_bronze,
-        "perf": perf,
-        "health": health,
-        "backlog": backlog,
-        "data_volume": _human_size(data_volume),
         "p95_latency": f"{p95}s" if p95 is not None else "—",
-        "total_uploads": total_uploads,
-        "completed_count": completed_count,
+        **sections,
     }
     return render(request, "pages/datasets/list.html", context)
+
+
+def dataset_list_sections(request, save_slug):
+    save = get_object_or_404(SaveMaster, slug=save_slug)
+    sections = _get_listing_sections(save)
+    return render(request, "datasets/partials/listing_sections.html", {
+        "save": save,
+        **sections,
+    })
 
 
 def dataset_detail(request, save_slug, upload_id):
@@ -164,12 +187,27 @@ def dataset_detail(request, save_slug, upload_id):
         LandingUpload.objects.prefetch_related(
             "task_rows",
             "bronze_ingestions__task_rows",
+            "bronze_ingestions__silver_ingestions__task_rows",
         ).select_related("save_master"),
         id=upload_id,
         save_master=save,
     )
 
     bronze_ingestion = upload.bronze_ingestions.first()
+
+    silver_ingestion = None
+    silver_attempts = []
+    if bronze_ingestion is not None:
+        silver_ingestion = (
+            bronze_ingestion.silver_ingestions
+            .order_by("-started_at")
+            .first()
+        )
+        if silver_ingestion is not None:
+            silver_attempts = sorted(
+                list(silver_ingestion.task_rows.all()),
+                key=lambda t: t.attempt,
+            )
 
     parse_attempts = sorted(
         [t for t in upload.task_rows.all() if t.step == "parse"],
@@ -189,8 +227,13 @@ def dataset_detail(request, save_slug, upload_id):
     )
 
     pipeline_duration = None
-    if bronze_ingestion and bronze_ingestion.completed_at:
-        delta = bronze_ingestion.completed_at - upload.upload_timestamp
+    pipeline_end = None
+    if silver_ingestion and silver_ingestion.completed_at:
+        pipeline_end = silver_ingestion.completed_at
+    elif bronze_ingestion and bronze_ingestion.completed_at:
+        pipeline_end = bronze_ingestion.completed_at
+    if pipeline_end:
+        delta = pipeline_end - upload.upload_timestamp
         pipeline_duration = round(delta.total_seconds(), 1)
 
     context = {
@@ -198,61 +241,50 @@ def dataset_detail(request, save_slug, upload_id):
         "saves": saves,
         "upload": upload,
         "bronze_ingestion": bronze_ingestion,
+        "silver_ingestion": silver_ingestion,
         "parse_attempts": parse_attempts,
         "store_attempts": store_attempts,
         "bronze_attempts": bronze_attempts,
+        "silver_attempts": silver_attempts,
         "pipeline_duration": pipeline_duration,
         "file_size": _human_size(upload.file_size_bytes),
     }
     return render(request, "pages/datasets/detail.html", context)
 
 
-def _event_generator(upload_id=None, save_slug=None):
-    """Yield SSE-formatted DatasetEvent rows.
+def dataset_pipeline_poll(request, save_slug, upload_id):
+    ctx = get_pipeline_status(upload_id)
+    ctx["save"] = ctx["upload"].save_master
 
-    Call with either upload_id (detail page) or save_slug (listing page).
-    """
-    last_id = 0
-
-    filters = {}
-    if upload_id is not None:
-        filters["upload_id"] = upload_id
-    if save_slug is not None:
-        filters["upload__save_master__slug"] = save_slug
-
-    while True:
-        events = (
-            DatasetEvent.objects.filter(**filters, id__gt=last_id)
-            .select_related("upload")
-            .order_by("id")
+    parse_attempts = sorted(
+        [t for t in ctx["upload"].task_rows.all() if t.step == "parse"],
+        key=lambda t: t.attempt,
+    )
+    store_attempts = sorted(
+        [t for t in ctx["upload"].task_rows.all() if t.step == "store"],
+        key=lambda t: t.attempt,
+    )
+    bronze_attempts = []
+    if ctx["bronze"] is not None:
+        bronze_attempts = sorted(
+            list(ctx["bronze"].task_rows.all()),
+            key=lambda t: t.attempt,
+        )
+    silver_attempts = []
+    if ctx["silver"] is not None:
+        silver_attempts = sorted(
+            list(ctx["silver"].task_rows.all()),
+            key=lambda t: t.attempt,
         )
 
-        for event in events:
-            data = {
-                "id": event.id,
-                "upload_id": event.upload_id,
-                "type": event.event_type,
-                "payload": event.payload,
-            }
-            yield f"event: dataset-event\ndata: {json.dumps(data)}\n\n"
-            last_id = event.id
+    ctx.update({
+        "parse_attempts": parse_attempts,
+        "store_attempts": store_attempts,
+        "bronze_attempts": bronze_attempts,
+        "silver_attempts": silver_attempts,
+    })
 
-        if not events:
-            time.sleep(0.5)
-
-
-def event_stream(request, upload_id):
-    return StreamingHttpResponse(
-        _event_generator(upload_id=upload_id),
-        content_type="text/event-stream",
-    )
-
-
-def listing_event_stream(request, save_slug):
-    return StreamingHttpResponse(
-        _event_generator(save_slug=save_slug),
-        content_type="text/event-stream",
-    )
+    return render(request, "datasets/partials/pipeline_detail.html", ctx)
 
 
 def node_detail_partial(request, upload_id, step):
@@ -267,6 +299,19 @@ def node_detail_partial(request, upload_id, step):
         )
         attempts = sorted(
             list(bronze.task_rows.all()), key=lambda t: t.attempt
+        )
+    elif step == "silver":
+        silver = (
+            SilverIngestion.objects
+            .filter(bronze_ingestion__landing_upload=upload)
+            .prefetch_related("task_rows")
+            .order_by("-started_at")
+            .first()
+        )
+        if silver is None:
+            raise Http404("No silver ingestion for this upload")
+        attempts = sorted(
+            list(silver.task_rows.all()), key=lambda t: t.attempt
         )
     else:
         attempts = sorted(
@@ -291,23 +336,47 @@ def listing_row_partial(request, upload_id):
     bronze = BronzeIngestion.objects.filter(
         landing_upload=OuterRef("pk")
     ).order_by("-started_at")
+    silver = SilverIngestion.objects.filter(
+        bronze_ingestion__landing_upload=OuterRef("pk")
+    ).order_by("-started_at")
 
     upload = get_object_or_404(
         LandingUpload.objects.select_related("save_master").annotate(
             parse_status=Subquery(parse_task.values("status")[:1]),
             store_status=Subquery(store_task.values("status")[:1]),
             bronze_status=Subquery(bronze.values("status")[:1]),
+            silver_status=Subquery(silver.values("status")[:1]),
         ),
         id=upload_id,
     )
-    dots = _phase_dots(upload)
-    return render(
+
+    is_terminal = (
+        upload.status in ("failed", "skipped")
+        or upload.silver_status == "completed"
+    )
+
+    response = render(
         request,
         "datasets/partials/listing_row.html",
         {
             "upload": upload,
             "save": upload.save_master,
-            "dots": dots,
             "file_size": _human_size(upload.file_size_bytes),
+            "is_terminal": is_terminal,
         },
     )
+    if is_terminal:
+        response["HX-Trigger"] = "datasets-changed"
+    return response
+
+
+@require_POST
+def retry_landing(request, save_slug, upload_id):
+    upload = get_object_or_404(
+        LandingUpload.objects.select_related("save_master"),
+        id=upload_id,
+        save_master__slug=save_slug,
+        status=LandingUpload.Status.FAILED,
+    )
+    dispatch_pipeline(upload.id)
+    return redirect("dataset_detail", save_slug=save_slug, upload_id=upload_id)

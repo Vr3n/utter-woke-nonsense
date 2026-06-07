@@ -5,5 +5,5 @@ from . import views
 app_name = "bronze"
 
 urlpatterns = [
-    path("hx/bronze/status/<int:upload_id>/", views.bronze_status_poll, name="bronze_status"),
+    path("hx/bronze/dispatch/<int:upload_id>/", views.dispatch_bronze, name="dispatch_bronze"),
 ]

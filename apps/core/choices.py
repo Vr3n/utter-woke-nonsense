@@ -7,6 +7,7 @@ class PipelineStatus(models.TextChoices):
     RETRYING = "retrying", "Retrying"
     COMPLETED = "completed", "Completed"
     FAILED = "failed", "Failed"
+    SKIPPED = "skipped", "Skipped"
 
 
 class TaskStatus(models.TextChoices):

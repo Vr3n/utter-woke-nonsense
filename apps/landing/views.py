@@ -5,7 +5,8 @@ from django.shortcuts import get_object_or_404, render
 from apps.core.models import SaveMaster
 
 from .forms import SnapshotUploadForm
-from .models import LandingUpload, LandingZoneTask
+from .models import LandingUpload
+from .pipeline import get_pipeline_status
 from .tables import LandingUploadTable
 from .tasks import dispatch_pipeline
 
@@ -72,10 +73,29 @@ def upload_snapshot(request, save_slug):
 
     return render(
         request,
-        "landing/partials/upload_status.html",
-        {"save": save, "snapshot_type": snapshot_type, "upload": upload},
+        "landing/partials/pipeline_status.html",
+        {
+            "save": save,
+            "snapshot_type": snapshot_type,
+            "upload": upload,
+            "bronze": None,
+            "silver": None,
+            "last_error": None,
+            "is_terminal": False,
+        },
         status=202,
     )
+
+
+def pipeline_status_poll(request, save_slug, snapshot_type, upload_id):
+    ctx = get_pipeline_status(upload_id)
+    ctx["save"] = ctx["upload"].save_master
+    ctx["snapshot_type"] = snapshot_type
+
+    response = render(request, "landing/partials/pipeline_status.html", ctx)
+    if ctx["upload"].status == LandingUpload.Status.COMPLETED:
+        response["HX-Trigger"] = "datasource-uploaded"
+    return response
 
 
 def upload_table_partial(request, save_slug, snapshot_type):
@@ -115,52 +135,4 @@ def upload_retry(request, save_slug, upload_id):
     )
 
 
-def upload_progress_fragment(request, upload_id):
-    upload = get_object_or_404(
-        LandingUpload.objects.only(
-            "parse_progress_current", "parse_progress_total",
-            "parse_progress_description", "status",
-        ),
-        id=upload_id,
-    )
 
-    return render(request, "landing/partials/progress_fragment.html", {
-        "upload": upload,
-        "is_terminal": (
-            upload.parse_progress_current >= upload.parse_progress_total
-            or             upload.status in (
-                LandingUpload.Status.COMPLETED,
-                LandingUpload.Status.FAILED,
-                LandingUpload.Status.SKIPPED,
-            )
-        ),
-    })
-
-
-def upload_status_poll(request, save_slug, snapshot_type, upload_id):
-    upload = get_object_or_404(
-        LandingUpload.objects.prefetch_related("task_rows"),
-        id=upload_id,
-        save_master__slug=save_slug,
-    )
-
-    last_error = (
-        upload.task_rows
-        .filter(status=LandingZoneTask.Status.FAILED)
-        .order_by("-attempt")
-        .first()
-    )
-
-    response = render(
-        request,
-        "landing/partials/upload_status.html",
-        {
-            "save": upload.save_master,
-            "snapshot_type": snapshot_type,
-            "upload": upload,
-            "last_error": last_error,
-        },
-    )
-    if upload.status == LandingUpload.Status.COMPLETED:
-        response["HX-Trigger"] = "datasource-uploaded"
-    return response

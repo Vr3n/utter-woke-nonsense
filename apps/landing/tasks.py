@@ -9,8 +9,8 @@ from django.utils import timezone
 
 from apps.bronze.tasks import dispatch_bronze_ingestion
 from apps.core.choices import PipelineStatus, TaskStatus
+from apps.core.metrics import pipeline_task_duration
 from apps.core.tasks import PipelineTask
-from apps.datasets.models import DatasetEvent
 from .converter import ConversionContext, CsvConversionStrategy, HtmlConversionStrategy
 from .models import LandingUpload, LandingZoneTask
 
@@ -96,29 +96,25 @@ def parse_file(self, upload_id: int) -> int:
         task_row.finished_at = timezone.now()
         task_row.save(update_fields=["status", "finished_at"])
 
-        DatasetEvent.objects.create(
-            upload=upload,
-            event_type=DatasetEvent.EventType.PARSE_COMPLETED,
-            payload={
-                "attempt": attempt,
-                "duration_s": task_row.duration_seconds,
-            },
-        )
+        pipeline_task_duration.labels(
+            task_name="parse_file",
+            snapshot_type=upload.snapshot_type,
+            status="completed",
+        ).observe(task_row.duration_seconds)
+
     except Exception as exc:
         if self.request.retries < self.max_retries:
             logger.warning("Retrying (attempt %d): %s", attempt, exc, extra=log_ctx)
         else:
             logger.error("Failed permanently: %s", exc, extra=log_ctx)
         self.record_failure(upload, task_row, exc)
-        DatasetEvent.objects.create(
-            upload=upload,
-            event_type=DatasetEvent.EventType.PARSE_FAILED,
-            payload={
-                "attempt": attempt,
-                "error_type": task_row.error_type,
-                "error_message": task_row.error_message,
-            },
-        )
+
+        pipeline_task_duration.labels(
+            task_name="parse_file",
+            snapshot_type=upload.snapshot_type,
+            status="failed",
+        ).observe(task_row.duration_seconds)
+
         raise
 
     return upload_id
@@ -193,43 +189,55 @@ def store_parquet(self, upload_id: int) -> None:
         task_row.finished_at = timezone.now()
         task_row.save(update_fields=["status", "finished_at"])
 
-        DatasetEvent.objects.create(
-            upload=upload,
-            event_type=DatasetEvent.EventType.STORE_COMPLETED,
-            payload={
-                "attempt": attempt,
-                "duration_s": task_row.duration_seconds,
-                "parquet_path": str(dest_path),
-            },
-        )
+        pipeline_task_duration.labels(
+            task_name="store_parquet",
+            snapshot_type=upload.snapshot_type,
+            status="completed",
+        ).observe(task_row.duration_seconds)
 
         try:
             dispatch_bronze_ingestion(upload)
         except Exception:
             logger.warning("Bronze ingestion dispatch failed", extra=log_ctx)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         logger.error("Non-retryable: FileNotFoundError — investigate", extra=log_ctx)
-        DatasetEvent.objects.create(
-            upload=upload,
-            event_type=DatasetEvent.EventType.STORE_FAILED,
-            payload={
-                "attempt": attempt,
-                "error_type": "FileNotFoundError",
-                "error_message": f"Staging file missing for upload {upload_id}",
-            },
+        upload.status = PipelineStatus.FAILED
+        upload.error_type = type(exc).__name__
+        upload.error_message = str(exc)
+        upload.save(update_fields=["status", "error_type", "error_message"])
+        task_row.status = TaskStatus.FAILED
+        task_row.error_type = type(exc).__name__
+        task_row.error_message = str(exc)
+        task_row.finished_at = timezone.now()
+        task_row.save(
+            update_fields=["status", "error_type", "error_message", "finished_at"]
         )
+        pipeline_task_duration.labels(
+            task_name="store_parquet",
+            snapshot_type=upload.snapshot_type,
+            status="failed",
+        ).observe(task_row.duration_seconds)
+
         raise
-    except FileExistsError:
+    except FileExistsError as exc:
         logger.error("Non-retryable: FileExistsError — investigate", extra=log_ctx)
-        DatasetEvent.objects.create(
-            upload=upload,
-            event_type=DatasetEvent.EventType.STORE_FAILED,
-            payload={
-                "attempt": attempt,
-                "error_type": "FileExistsError",
-                "error_message": f"Destination already exists for upload {upload_id}",
-            },
+        upload.status = PipelineStatus.FAILED
+        upload.error_type = type(exc).__name__
+        upload.error_message = str(exc)
+        upload.save(update_fields=["status", "error_type", "error_message"])
+        task_row.status = TaskStatus.FAILED
+        task_row.error_type = type(exc).__name__
+        task_row.error_message = str(exc)
+        task_row.finished_at = timezone.now()
+        task_row.save(
+            update_fields=["status", "error_type", "error_message", "finished_at"]
         )
+        pipeline_task_duration.labels(
+            task_name="store_parquet",
+            snapshot_type=upload.snapshot_type,
+            status="failed",
+        ).observe(task_row.duration_seconds)
+
         raise
     except Exception as exc:
         if self.request.retries < self.max_retries:
@@ -237,15 +245,13 @@ def store_parquet(self, upload_id: int) -> None:
         else:
             logger.error("Failed permanently: %s", exc, extra=log_ctx)
         self.record_failure(upload, task_row, exc)
-        DatasetEvent.objects.create(
-            upload=upload,
-            event_type=DatasetEvent.EventType.STORE_FAILED,
-            payload={
-                "attempt": attempt,
-                "error_type": task_row.error_type,
-                "error_message": task_row.error_message,
-            },
-        )
+
+        pipeline_task_duration.labels(
+            task_name="store_parquet",
+            snapshot_type=upload.snapshot_type,
+            status="failed",
+        ).observe(task_row.duration_seconds)
+
         raise
 
 

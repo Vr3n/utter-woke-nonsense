@@ -1,0 +1,255 @@
+<div id="pipeline-detail-{{ upload.id }}"
+     {% if not is_terminal %}
+     hx-get="{% url 'dataset_pipeline_poll' save_slug=save.slug upload_id=upload.id %}"
+     hx-trigger="every 2s"
+     hx-swap="outerHTML"
+     {% endif %}>
+
+  {% comment %}Pipeline graph{% endcomment %}
+  <div class="mb-8">
+    <div class="mb-6">
+      <h2 class="text-sm uppercase tracking-[0.2em] text-zinc-400 font-bold">Pipeline Graph</h2>
+    </div>
+
+    <div class="flex items-center justify-center py-8" id="pipeline-graph">
+      <c-datasets.graph_node
+        step="source"
+        label="Source"
+        status="{{ upload.status }}"
+        duration="—"
+        upload_id="{{ upload.id }}" />
+
+      <div class="pipeline-connector">
+        <svg width="48" height="2" viewBox="0 0 48 2" class="text-zinc-700">
+          <line x1="0" y1="1" x2="44" y2="1" stroke="currentColor" stroke-width="1.5"/>
+          <polygon points="44,0 48,1 44,2" fill="currentColor"/>
+        </svg>
+      </div>
+
+      {% with latest_parse=parse_attempts|last %}
+      <c-datasets.graph_node
+        step="parse"
+        label="Parse"
+        status="{{ latest_parse.status|default:'pending' }}"
+        duration="{% if latest_parse.duration_seconds %}{{ latest_parse.duration_seconds }}s{% else %}—{% endif %}"
+        upload_id="{{ upload.id }}" />
+      {% endwith %}
+
+      <div class="pipeline-connector">
+        <svg width="48" height="2" viewBox="0 0 48 2" class="text-zinc-700">
+          <line x1="0" y1="1" x2="44" y2="1" stroke="currentColor" stroke-width="1.5"/>
+          <polygon points="44,0 48,1 44,2" fill="currentColor"/>
+        </svg>
+      </div>
+
+      {% with latest_store=store_attempts|last %}
+      <c-datasets.graph_node
+        step="store"
+        label="Store"
+        status="{{ latest_store.status|default:'pending' }}"
+        duration="{% if latest_store.duration_seconds %}{{ latest_store.duration_seconds }}s{% else %}—{% endif %}"
+        upload_id="{{ upload.id }}" />
+      {% endwith %}
+
+      <div class="pipeline-connector">
+        <svg width="48" height="2" viewBox="0 0 48 2" class="text-zinc-700">
+          <line x1="0" y1="1" x2="44" y2="1" stroke="currentColor" stroke-width="1.5"/>
+          <polygon points="44,0 48,1 44,2" fill="currentColor"/>
+        </svg>
+      </div>
+
+      {% with latest_bronze=bronze_attempts|last %}
+      <c-datasets.graph_node
+        step="bronze"
+        label="Bronze"
+        status="{% if bronze %}{{ bronze.status }}{% else %}pending{% endif %}"
+        duration="{% if latest_bronze.duration_seconds %}{{ latest_bronze.duration_seconds }}s{% else %}—{% endif %}"
+        upload_id="{{ upload.id }}" />
+      {% endwith %}
+
+      <div class="pipeline-connector">
+        <svg width="48" height="2" viewBox="0 0 48 2" class="text-zinc-700">
+          <line x1="0" y1="1" x2="44" y2="1" stroke="currentColor" stroke-width="1.5"/>
+          <polygon points="44,0 48,1 44,2" fill="currentColor"/>
+        </svg>
+      </div>
+
+      {% with latest_silver=silver_attempts|last %}
+      <c-datasets.graph_node
+        step="silver"
+        label="Silver"
+        status="{% if silver %}{{ silver.status }}{% else %}pending{% endif %}"
+        duration="{% if latest_silver.duration_seconds %}{{ latest_silver.duration_seconds }}s{% else %}—{% endif %}"
+        upload_id="{{ upload.id }}" />
+      {% endwith %}
+    </div>
+  </div>
+
+  {% comment %}Landing retry{% endcomment %}
+  {% if upload.status == "failed" %}
+    <div class="mb-6 border border-red-900/30 bg-red-950/10 px-6 py-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-xs uppercase tracking-[0.2em] text-red-400 font-bold">Pipeline Failed</div>
+          <div class="text-xs text-zinc-500 mt-1">The landing zone pipeline (parse/store) failed. Fix the issue and retry.</div>
+        </div>
+        <form method="POST" action="{% url 'retry_landing' save_slug=save.slug upload_id=upload.id %}">
+          {% csrf_token %}
+          <button type="submit"
+                  class="cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-medium tracking-widest uppercase text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100">
+            Retry Pipeline
+          </button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  {% comment %}Bronze status{% endcomment %}
+  {% if upload.status == "completed" %}
+    <div class="mb-6">
+      <div id="bronze-status-{{ upload.id }}">
+        <div class="border border-zinc-800 bg-zinc-950/80 p-6">
+          {% if bronze is None %}
+            <div class="flex items-center gap-3">
+              <div class="h-2 w-2 rounded-full bg-zinc-600"></div>
+              <span class="text-xs uppercase tracking-widest text-zinc-500">Bronze: Pending</span>
+            </div>
+
+          {% elif bronze.status == "completed" %}
+            <div class="flex items-center gap-3 mb-4">
+              <div class="h-2 w-2 rounded-full bg-green-400"></div>
+              <span class="text-xs uppercase tracking-widest text-green-400">Bronze: Completed</span>
+            </div>
+            {% if bronze.ingested_row_count is not None %}
+              <div class="text-xs font-mono text-zinc-500">
+                {{ bronze.ingested_row_count }} rows ingested
+              </div>
+            {% endif %}
+
+          {% elif bronze.status == "skipped" %}
+            <div class="flex items-center gap-3 mb-4">
+              <div class="h-2 w-2 rounded-full bg-zinc-600"></div>
+              <span class="text-xs uppercase tracking-widest text-zinc-500">Bronze: Skipped</span>
+            </div>
+            {% if bronze.error_message %}
+              <div class="mt-3 border-t border-zinc-800 pt-3 text-xs font-mono text-zinc-600">
+                <span class="text-zinc-500">{{ bronze.error_type }}</span>: {{ bronze.error_message }}
+              </div>
+            {% endif %}
+
+          {% elif bronze.status == "failed" %}
+            <div class="flex items-center gap-3 mb-4">
+              <div class="h-2 w-2 rounded-full bg-red-400"></div>
+              <span class="text-xs uppercase tracking-widest text-red-400">Bronze: Failed</span>
+            </div>
+            {% if bronze.error_message %}
+              <div class="mb-3 border-t border-zinc-800 pt-3 text-xs font-mono text-zinc-600">
+                <span class="text-zinc-500">{{ bronze.error_type }}</span>: {{ bronze.error_message }}
+              </div>
+            {% endif %}
+            <button class="cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-medium tracking-widest uppercase text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                    hx-post="{% url 'bronze:dispatch_bronze' upload_id=upload.id %}"
+                    hx-target="#pipeline-detail-{{ upload.id }}"
+                    hx-swap="outerHTML">
+              Retry Bronze
+            </button>
+
+          {% else %}
+            <div class="flex items-center gap-3 mb-3">
+              <div class="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></div>
+              <span class="text-xs uppercase tracking-widest text-zinc-400">Bronze processing</span>
+            </div>
+            <div class="mb-2 animate-fade-slide-up">
+              <span class="text-xs text-zinc-500">{{ bronze.parse_progress_description }}</span>
+            </div>
+            <div class="mb-1 flex items-center justify-between">
+              <span class="text-xs font-mono text-zinc-600">
+                {{ bronze.parse_progress_current }}/{{ bronze.parse_progress_total }}
+              </span>
+            </div>
+            <c-ui.progress value="{{ bronze.parse_progress_percent }}" color="purple" />
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% comment %}Silver dispatch + status{% endcomment %}
+  {% if bronze is not None and bronze.status == "completed" %}
+    <div class="mb-6">
+      <div id="silver-status-{{ upload.id }}">
+        <div class="border border-zinc-800 bg-zinc-950/80 p-6">
+          {% if silver is None %}
+            <div class="flex items-center gap-3 mb-3">
+              <div class="h-2 w-2 rounded-full bg-zinc-600"></div>
+              <span class="text-xs uppercase tracking-widest text-zinc-500">Silver: Pending</span>
+            </div>
+            <button class="cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-medium tracking-widest uppercase text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                    hx-post="{% url 'silver:dispatch_silver' upload_id=upload.id %}"
+                    hx-target="#pipeline-detail-{{ upload.id }}"
+                    hx-swap="outerHTML">
+              Process Silver
+            </button>
+
+          {% elif silver.status == "completed" %}
+            <div class="flex items-center gap-3 mb-4">
+              <div class="h-2 w-2 rounded-full bg-green-400"></div>
+              <span class="text-xs uppercase tracking-widest text-green-400">Silver: Completed</span>
+            </div>
+            {% if silver.inserted_row_count is not None %}
+              <div class="text-xs font-mono text-zinc-500">
+                {{ silver.inserted_row_count }} rows ingested
+              </div>
+            {% endif %}
+
+          {% elif silver.status == "skipped" %}
+            <div class="flex items-center gap-3 mb-4">
+              <div class="h-2 w-2 rounded-full bg-zinc-600"></div>
+              <span class="text-xs uppercase tracking-widest text-zinc-500">Silver: Skipped</span>
+            </div>
+            {% if silver.error_message %}
+              <div class="mt-3 border-t border-zinc-800 pt-3 text-xs font-mono text-zinc-600">
+                <span class="text-zinc-500">{{ silver.error_type }}</span>: {{ silver.error_message }}
+              </div>
+            {% endif %}
+
+          {% elif silver.status == "failed" %}
+            <div class="flex items-center gap-3 mb-4">
+              <div class="h-2 w-2 rounded-full bg-red-400"></div>
+              <span class="text-xs uppercase tracking-widest text-red-400">Silver: Failed</span>
+            </div>
+            {% if silver.error_message %}
+              <div class="mt-3 border-t border-zinc-800 pt-3 text-xs font-mono text-zinc-600">
+                <span class="text-zinc-500">{{ silver.error_type }}</span>: {{ silver.error_message }}
+              </div>
+            {% endif %}
+            <button class="mt-3 cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-medium tracking-widest uppercase text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                    hx-post="{% url 'silver:dispatch_silver' upload_id=upload.id %}"
+                    hx-target="#pipeline-detail-{{ upload.id }}"
+                    hx-swap="outerHTML">
+              Retry Silver
+            </button>
+
+          {% else %}
+            <div class="flex items-center gap-3 mb-3">
+              <div class="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></div>
+              <span class="text-xs uppercase tracking-widest text-zinc-400">Silver processing</span>
+            </div>
+            <div class="mb-2 animate-fade-slide-up">
+              <span class="text-xs text-zinc-500">{{ silver.parse_progress_description }}</span>
+            </div>
+            <div class="mb-1 flex items-center justify-between">
+              <span class="text-xs font-mono text-zinc-600">
+                {{ silver.parse_progress_current }}/{{ silver.parse_progress_total }}
+              </span>
+            </div>
+            <c-ui.progress value="{{ silver.parse_progress_percent }}" color="purple" />
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% comment %}Node detail panel{% endcomment %}
+  <div id="node-detail" class="mb-6"></div>
+</div>

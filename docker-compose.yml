@@ -4,7 +4,7 @@ x-app-base: &app-base
     - .:/app
     - /app/.venv
   env_file:
-    - .env
+    - .env.docker
   environment:
     CELERY_BROKER_URL: redis://fm-redis:6379/0
     CELERY_RESULT_BACKEND: redis://fm-redis:6379/1
@@ -42,12 +42,20 @@ services:
   fm-celery-scheduler:
     <<: *app-base
     container_name: fm-celery-worker
-    command: celery -A config worker -l info -E
+    command: sh -c "mkdir -p /tmp/prometheus_metrics && celery -A config worker -l info -E"
+    environment:
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_metrics
+    tmpfs:
+      - /tmp/prometheus_metrics
 
   fm-celery-beat:
     <<: *app-base
     container_name: fm-celery-beat
-    command: celery -A config beat -l info -s /tmp/celerybeat-schedule
+    command: sh -c "mkdir -p /tmp/prometheus_metrics && celery -A config beat -l info -s /tmp/celerybeat-schedule"
+    environment:
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_metrics
+    tmpfs:
+      - /tmp/prometheus_metrics
 
   fm-flower:
     <<: *app-base
@@ -56,5 +64,48 @@ services:
     ports:
       - "5555:5555"
 
+  celery-exporter:
+    image: danihodovic/celery-exporter:latest
+    container_name: fm-celery-exporter
+    command:
+      - --broker-url=redis://fm-redis:6379/1
+      - --retry-interval=5
+    ports:
+      - "9808:9808"
+    depends_on:
+      - fm-redis
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: fm-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    depends_on:
+      - fm-celery-scheduler
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fm-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   fm_warehouse_data:
+  prometheus_data:
+  grafana_data:

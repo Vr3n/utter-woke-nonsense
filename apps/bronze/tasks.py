@@ -7,9 +7,8 @@ from django.utils import timezone
 
 from apps.core.choices import PipelineStatus, TaskStatus
 from apps.core.db import duckdb_pg_connect, get_pg_conn_string
-from apps.core.metrics import pipeline_rows_processed, pipeline_task_duration
+from apps.core.metrics import pipeline_rows_processed, pipeline_task_duration, pipeline_task_failures
 from apps.core.tasks import PipelineTask
-from apps.datasets.models import DatasetEvent
 from .models import BronzeIngestion, BronzeIngestionTask, BronzeIngestionPhase
 
 logger = get_task_logger(__name__)
@@ -193,17 +192,7 @@ def ingest_to_bronze(self, ingestion_id: int) -> None:
         task_row.finished_at = timezone.now()
         task_row.save(update_fields=["phase", "status", "finished_at"])
 
-        DatasetEvent.objects.create(
-            upload=upload,
-            event_type=DatasetEvent.EventType.BRONZE_COMPLETED,
-            payload={
-                "attempt": attempt,
-                "duration_s": task_row.duration_seconds,
-                "source_rows": source_count,
-                "ingested_rows": ingested_count,
-                "columns": column_count,
-            },
-        )
+
 
         pipeline_task_duration.labels(
             task_name="ingest_to_bronze",
@@ -227,8 +216,12 @@ def ingest_to_bronze(self, ingestion_id: int) -> None:
     ) as exc:
         logger.error(
             "Non-retryable: %s — investigate", type(exc).__name__,
-            extra=log_ctx,
+            extra={**log_ctx, "error_type": type(exc).__name__},
         )
+        pipeline_task_failures.labels(
+            task_name="ingest_to_bronze",
+            error_type=type(exc).__name__,
+        ).inc()
         ingestion.status = PipelineStatus.FAILED
         ingestion.error_type = type(exc).__name__
         ingestion.error_message = str(exc)
@@ -245,16 +238,6 @@ def ingest_to_bronze(self, ingestion_id: int) -> None:
         task_row.save(
             update_fields=["status", "error_type", "error_message", "finished_at"]
         )
-        DatasetEvent.objects.create(
-            upload=upload,
-            event_type=DatasetEvent.EventType.BRONZE_FAILED,
-            payload={
-                "attempt": attempt,
-                "error_type": type(exc).__name__,
-                "error_message": str(exc),
-            },
-        )
-
         pipeline_task_duration.labels(
             task_name="ingest_to_bronze",
             snapshot_type=upload.snapshot_type,
@@ -283,13 +266,4 @@ def ingest_to_bronze(self, ingestion_id: int) -> None:
             status="failed",
         ).observe(task_row.duration_seconds)
 
-        DatasetEvent.objects.create(
-            upload=upload,
-            event_type=DatasetEvent.EventType.BRONZE_FAILED,
-            payload={
-                "attempt": attempt,
-                "error_type": task_row.error_type,
-                "error_message": task_row.error_message,
-            },
-        )
         raise

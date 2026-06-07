@@ -73,7 +73,8 @@ updated together at each step — never one without the other.
 On failure: do NOT update parse_progress_description to the error message.
 Leave description at the last known step. The progress_fragment.html template
 reads upload.status to decide terminal rendering.
-The error detail lives in LandingZoneTask.error_message, not on the upload.
+The error detail lives on both the upload (LandingUpload.error_message) and LandingZoneTask.error_message.
+record_failure writes obj.error_type/obj.error_message uniformly on ingestion-level objects.
 
 ## HTMX Progress Polling — implementation pattern
 
@@ -262,3 +263,133 @@ CELERY_TASK_ALWAYS_EAGER = True (set in root conftest.py) — tasks run inline.
 Test fixtures create parquet files with pandas, truncate bronze tables after
 each test via DuckDB ATTACH. Always use duckdb_pg_connect() context manager
 in fixtures to prevent connection leaks.
+
+## Silver layer — core rules
+
+The single drop gate is unique_id. Rows without unique_id are dropped before
+INSERT and counted in SilverIngestion.dropped_row_count. No row reaches silver
+without a unique_id.
+
+There is no is_usable flag. No unusable_reason column. No quality tiers. If a
+row is in silver, it is a valid typed observation.
+
+Silver processes one bronze batch at a time. One BronzeIngestion → one
+SilverIngestion. Cross-batch deduplication is gold's concern.
+
+Deduplication within a batch: SELECT DISTINCT on all columns (exact row dedup).
+Within a single FM export, two rows with the same (unique_id, club, division)
+but different stats are legitimate distinct observations — keep both.
+Only rows with identical values in ALL columns are removed.
+No ROW_NUMBER() tiebreaker. No information loss.
+
+### SilverIngestion Task lifecycle
+
+dispatch_silver_ingestion(bronze_ingestion) is called from ingest_to_bronze
+success path (inside BronzeIngestion COMPLETED block). It creates a PROCESSING
+SilverIngestion record and chains transform_to_silver.delay().
+
+SilverIngestion.status uses PipelineStatus. SilverIngestionTask.status uses TaskStatus.
+SilverIngestionTask.phase uses SilverIngestionPhase (in silver/models.py):
+
+  attaching → counting_source → transforming → inserting → verifying_insertion → completed
+
+### Silver progress fields
+
+Same pattern as bronze. parse_progress_total defaults to 5. The 6-phase
+lifecycle maps to 5 progress steps:
+
+| Step | Phase               | Description                      |
+| ---- | ------------------- | -------------------------------- |
+| 1    | attaching           | "Attaching to PostgreSQL"        |
+| 2    | counting_source     | "Counting source bronze rows"    |
+| 3    | transforming        | "Transforming and cleaning data" |
+| 4    | inserting           | "Inserting into silver table"    |
+| 5    | verifying_insertion | "Verifying ingested row count"   |
+| final| completed           | "Done"                           |
+
+### DuckDB connection — transform_to_silver
+
+Import duckdb_pg_connect from bronze/tasks.py. Single ATTACH with alias pg_db.
+Reads from pg_db.bronze.{type}, writes to pg_db.silver.{type}.
+Both schemas live in the same PostgreSQL database — one ATTACH suffices.
+
+Register 4 UDFs on connection before executing the SQL pipeline:
+  parse_currency_min(VARCHAR) → INTEGER
+  parse_currency_max(VARCHAR) → INTEGER
+  parse_starts(VARCHAR) → INTEGER
+  parse_subs(VARCHAR) → INTEGER
+
+### SQL pipeline structure
+
+build_silver_pipeline() generates a single SQL string with 4 CTEs:
+  source → unpacked → cleaned → final → INSERT
+
+Conditionally includes opponent/ingame_matchdate columns for
+squad_matchstats_snapshot. The INSERT column list is also conditional.
+
+Try_CAST for unique_id — non-numeric values become NULL and are filtered
+by WHERE unique_id IS NOT NULL in the final CTE. Never crashes a batch.
+
+Date parsing uses str_split + make_date (DD/MM/YYYY), never strptime.
+
+### DuckDB exception taxonomy for transform_to_silver
+
+Non-retryable (catch in dedicated except block, set FAILED immediately):
+  duckdb.CatalogException       silver table missing → migration failure
+  duckdb.ConstraintException    PK/FK/unique violation → data integrity
+  duckdb.InvalidInputException  JSONB key missing → FM version drift
+  duckdb.NotImplementedException DuckDB feature gap → not transient
+
+Transient (fall through to generic except Exception + record_failure):
+  duckdb.IOException           PG read/write glitches
+  duckdb.OperationalError      PG timeouts, deadlocks, transient network
+  duckdb.ConnectionException   PG unreachable at ATTACH time
+
+Idempotency guard: early return with FAILED if a COMPLETED SilverIngestion
+exists for the same bronze_ingestion. Never raise.
+
+### Silver data table migration
+
+0002_silver_data_tables.py creates silver schema + 3 tables:
+  silver.squad_snapshot (52 columns)
+  silver.scouting_snapshot (52 columns)
+  silver.squad_matchstats_snapshot (54 columns — adds opponent, ingame_matchdate)
+
+0003_add_new_columns.py ALTERs squad and scouting tables to add 29 new
+columns (excluding recommendation → 80 columns each). matchstats is
+unchanged (stays at 54). See AGENTS.md silver column mapping below
+for the full list of new columns.
+
+New RunSQL operations in new migrations — never edit 0001 or 0002.
+
+Each table has 4 indexes:
+  idx_silver_{table}_ingestion    on (ingestion_id)
+  idx_silver_{table}_ingame_date  on (ingame_date)
+  idx_silver_{table}_unique_id    on (unique_id)
+  idx_silver_{table}_dedup        on (unique_id, club, division) — composite for gold
+
+Matchstats gets 2 extra indexes:
+  idx_silver_matchstats_opponent   on (opponent)
+  idx_silver_matchstats_matchdate  on (ingame_matchdate)
+
+### Dataset events
+
+SILVER_COMPLETED and SILVER_FAILED are added to DatasetEvent.EventType in
+apps/datasets/models.py. Created on task success/failure matching bronze pattern.
+
+### dispatch_silver_ingestion
+
+Called from bronze/tasks.py ingest_to_bronze COMPLETED block. Creates
+SilverIngestion with status=PROCESSING, chains transform_to_silver.delay().
+
+### dispatch pipeline wiring
+
+dispatch_pipeline (landing/tasks.py) → ingest_to_bronze → on COMPLETED →
+dispatch_silver_ingestion → transform_to_silver
+
+### Silver audit
+
+SilverIngestion.dropped_row_count tracks only NULL unique_id drops.
+SELECT DISTINCT removals are NOT counted as "dropped" — they carry no
+distinct information.
+dropped_row_count = 0 is expected on clean exports. Non-zero warrants investigation.

@@ -5,6 +5,7 @@
     {% if status == 'succeeded' or status == 'completed' %}border-t-2 border-t-emerald-500 border-zinc-800 bg-zinc-950/80
     {% elif status == 'running' or status == 'processing' or status == 'retrying' %}border-t-2 border-t-amber-500 border-zinc-700 bg-zinc-950
     {% elif status == 'failed' %}border-t-2 border-t-red-500 border-zinc-800 bg-zinc-950/80
+    {% elif status == 'skipped' %}border-t-2 border-t-zinc-600 border-zinc-800 bg-zinc-950/50
     {% else %}border-t-2 border-t-zinc-700 border-zinc-800 bg-zinc-950/50{% endif %}
     hover:border-t-violet-500 hover:bg-zinc-900"
     hx-get="{% url 'dataset_node_detail' upload_id=upload_id step=step %}"
@@ -28,6 +29,10 @@
         <svg class="w-4 h-4 {% if status == 'completed' %}text-emerald-400{% elif status == 'failed' %}text-red-400{% else %}text-zinc-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
         </svg>
+      {% elif step == "silver" %}
+        <svg class="w-4 h-4 {% if status == 'completed' %}text-emerald-400{% elif status == 'failed' %}text-red-400{% else %}text-zinc-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+        </svg>
       {% endif %}
     </div>
 
@@ -38,6 +43,7 @@
         {% if status == 'succeeded' or status == 'completed' %}bg-emerald-400
         {% elif status == 'running' or status == 'processing' or status == 'retrying' %}bg-amber-400
         {% elif status == 'failed' %}bg-red-400
+        {% elif status == 'skipped' %}bg-zinc-600
         {% else %}bg-zinc-700{% endif %}">
       </span>
       <span class="text-[10px] font-mono text-zinc-600">{{ duration }}</span>

@@ -48,6 +48,8 @@ class TestPipelineTaskRecordFailure:
     def mock_obj(self):
         obj = Mock()
         obj.status = "processing"
+        obj.error_type = ""
+        obj.error_message = ""
         return obj
 
     @pytest.fixture
@@ -72,7 +74,9 @@ class TestPipelineTaskRecordFailure:
             task_instance.record_failure(mock_obj, mock_task_row, exc)
 
         assert mock_obj.status == PipelineStatus.RETRYING
-        mock_obj.save.assert_called_once_with(update_fields=["status"])
+        mock_obj.save.assert_called_once_with(
+            update_fields=["status", "error_type", "error_message"]
+        )
 
         assert mock_task_row.status == TaskStatus.RETRYING
         assert mock_task_row.error_type == "ValueError"
@@ -95,7 +99,9 @@ class TestPipelineTaskRecordFailure:
             task_instance.record_failure(mock_obj, mock_task_row, exc)
 
         assert mock_obj.status == PipelineStatus.FAILED
-        mock_obj.save.assert_called_once_with(update_fields=["status"])
+        mock_obj.save.assert_called_once_with(
+            update_fields=["status", "error_type", "error_message"]
+        )
         assert mock_task_row.status == TaskStatus.FAILED
         assert mock_task_row.error_type == "RuntimeError"
         assert mock_task_row.error_message == "disk full"
