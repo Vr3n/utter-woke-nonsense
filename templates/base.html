@@ -10,7 +10,7 @@
 
     {% load static %}
     <script src="{% static 'django_htmx/htmx.min.js' %}" defer></script>
-    <script src="{% static 'js/htmx-sse.js' %}" defer></script>
+    <link rel="stylesheet" href="{% static 'vendors/dropzone.min.css' %}" />
     <link rel="stylesheet" href="{% static 'css/theme.css' %}" />
   </head>
 
@@ -31,6 +31,7 @@
       </div>
     </div>
 
+    <script src="{% static 'vendors/dropzone.min.js' %}"></script>
     <script src="{% static 'js/app.js' %}"></script>
   </body>
 </html>

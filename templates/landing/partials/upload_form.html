@@ -1,8 +1,7 @@
-<form hx-post="{% url 'upload_snapshot' save_slug=save.slug %}"
-      hx-target="#upload-region"
-      hx-swap="innerHTML"
+<form action="{% url 'upload_snapshot' save_slug=save.slug %}"
       enctype="multipart/form-data"
-      class="border border-zinc-800 bg-zinc-950/80 p-6">
+      class="dropzone border border-zinc-800 bg-zinc-950/80 p-6"
+      id="snapshot-upload-form">
   {% csrf_token %}
   <input type="hidden" name="snapshot_type" value="{{ snapshot_type }}">
 
@@ -14,31 +13,36 @@
     {% endif %}
   </div>
 
-  <div class="mb-4">
-    <label class="block text-sm uppercase tracking-widest text-zinc-500 mb-2">Season</label>
-    {{ form.season }}
-    {% if form.season.errors %}
-      <div class="text-red-400 text-xs mt-1">{{ form.season.errors }}</div>
-    {% endif %}
+  <div class="flex gap-4 mb-4">
+    <div class="flex-1">
+      <label class="block text-sm uppercase tracking-widest text-zinc-500 mb-2">Season</label>
+      {{ form.season }}
+      {% if form.season.errors %}
+        <div class="text-red-400 text-xs mt-1">{{ form.season.errors }}</div>
+      {% endif %}
+    </div>
+    <div class="flex-1">
+      <label class="block text-sm uppercase tracking-widest text-zinc-500 mb-2">Data Label</label>
+      {{ form.data_label }}
+      {% if form.data_label.errors %}
+        <div class="text-red-400 text-xs mt-1">{{ form.data_label.errors }}</div>
+      {% endif %}
+    </div>
   </div>
 
-  <div class="mb-4">
-    <label class="block text-sm uppercase tracking-widest text-zinc-500 mb-2">Data Label</label>
-    {{ form.data_label }}
-    {% if form.data_label.errors %}
-      <div class="text-red-400 text-xs mt-1">{{ form.data_label.errors }}</div>
-    {% endif %}
+  <div class="dz-message flex flex-col items-center justify-center gap-2 py-6 border-2 border-dashed border-zinc-700 rounded mb-6 transition-colors hover:border-zinc-500 hover:bg-zinc-900/20 cursor-pointer" data-dz-message>
+    <svg class="w-8 h-8 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+    </svg>
+    <p class="text-zinc-400 text-sm">Drop file here or click to browse</p>
+    <p class="text-zinc-600 text-xs">CSV or HTML</p>
   </div>
 
-  <div class="mb-6">
-    <label class="block text-sm uppercase tracking-widest text-zinc-500 mb-2">Source File (CSV / HTML)</label>
-    {{ form.source_file }}
-    {% if form.source_file.errors %}
-      <div class="text-red-400 text-xs mt-1">{{ form.source_file.errors }}</div>
-    {% endif %}
-  </div>
+  {% if form.source_file.errors %}
+    <div class="text-red-400 text-xs mt-1 mb-4">{{ form.source_file.errors }}</div>
+  {% endif %}
 
-  <button type="submit"
+  <button type="button" id="submit-upload"
           class="border border-zinc-800 bg-zinc-950 px-6 py-3 uppercase tracking-widest text-sm transition-all hover:bg-zinc-900 hover:border-violet-700 active:scale-[0.98]">
     Upload
   </button>

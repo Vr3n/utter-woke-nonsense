@@ -77,3 +77,66 @@ document.addEventListener("message", function (e) {
 document.body.addEventListener("save-created", function (e) {
   closeModal();
 });
+
+Dropzone.autoDiscover = false;
+
+function initUploadDropzone() {
+  var form = document.getElementById("snapshot-upload-form");
+  if (!form || form.dropzone) return;
+
+  var dz = new Dropzone(form, {
+    paramName: "source_file",
+    maxFiles: 1,
+    maxFilesize: 256,
+    acceptedFiles: ".csv,.html,.htm",
+    autoProcessQueue: false,
+    addRemoveLinks: false,
+    dictDefaultMessage: "",
+    dictFallbackMessage: "",
+    dictFileTooBig: "File is too big ({{filesize}}MiB). Max: {{maxFilesize}}MiB.",
+    dictInvalidFileType: "Only CSV and HTML files are accepted.",
+  });
+
+  dz.on("addedfile", function () {
+    if (dz.files.length > 1) {
+      dz.removeFile(dz.files[0]);
+    }
+  });
+
+  dz.on("sending", function (file, xhr, formData) {
+    formData.append("csrfmiddlewaretoken", form.querySelector('[name="csrfmiddlewaretoken"]').value);
+    formData.append("snapshot_type", form.querySelector('[name="snapshot_type"]').value);
+    formData.append("ingame_date", form.querySelector('[name="ingame_date"]').value);
+    formData.append("season", form.querySelector('[name="season"]').value);
+    formData.append("data_label", form.querySelector('[name="data_label"]').value);
+  });
+
+  dz.on("success", function (file, response) {
+    var region = document.getElementById("upload-region");
+    region.innerHTML = response;
+    if (window.htmx) htmx.process(region);
+    dz.destroy();
+  });
+
+  dz.on("error", function (file, response, xhr) {
+    if (xhr && xhr.status === 400) {
+      var region = document.getElementById("upload-region");
+      region.innerHTML = response;
+      if (window.htmx) htmx.process(region);
+      dz.destroy();
+      initUploadDropzone();
+    }
+  });
+
+  document.getElementById("submit-upload").addEventListener("click", function (e) {
+    e.preventDefault();
+    if (dz.files.length === 0) return;
+    dz.processQueue();
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initUploadDropzone);
+} else {
+  initUploadDropzone();
+}
